@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: vacation_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: vacation_db
+      MYSQL_USER: vacation_user
+      MYSQL_PASSWORD: vacation_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  streamlit:
+    build: .
+    container_name: vacation_app
+    ports:
+      - "8501:8501"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: vacation_db
+      DB_USER: vacation_user
+      DB_PASSWORD: vacation_pass
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./app.py:/app/app.py
+
+volumes:
+  mysql_data:
