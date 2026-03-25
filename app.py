@@ -715,8 +715,37 @@ with tab4:
 
                 st.markdown("---")
 
-                # Delete event button
-                if st.button(f"Delete Event", key=f"delete_event_{event_id}"):
-                    delete_event(event_id)
-                    st.success("Event deleted!")
-                    st.rerun()
+                # Share and Delete buttons
+                btn_col1, btn_col2 = st.columns([1, 1])
+
+                with btn_col1:
+                    if st.button("📤 Share Event", key=f"share_event_{event_id}"):
+                        going = [f"  {emoji} {name}" for mid, name, emoji, att in responses if att]
+                        not_going = [f"  {emoji} {name}" for mid, name, emoji, att in responses if att is not None and not att]
+                        no_response = [f"  {emoji} {name}" for mid, name, emoji, att in responses if att is None]
+
+                        summary = f"📌 {event_name}\n"
+                        summary += f"Created: {created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+
+                        if going:
+                            summary += f"✅ Going ({len(going)}):\n" + "\n".join(going) + "\n\n"
+                        if not_going:
+                            summary += f"❌ Not going ({len(not_going)}):\n" + "\n".join(not_going) + "\n\n"
+                        if no_response:
+                            summary += f"⚪ No response ({len(no_response)}):\n" + "\n".join(no_response) + "\n"
+
+                        st.session_state[f"share_text_{event_id}"] = summary
+
+                    if f"share_text_{event_id}" in st.session_state:
+                        st.text_area(
+                            "Copy the summary below:",
+                            value=st.session_state[f"share_text_{event_id}"],
+                            height=200,
+                            key=f"share_textarea_{event_id}"
+                        )
+
+                with btn_col2:
+                    if st.button("Delete Event", key=f"delete_event_{event_id}"):
+                        delete_event(event_id)
+                        st.success("Event deleted!")
+                        st.rerun()
