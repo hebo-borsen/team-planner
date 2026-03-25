@@ -24,6 +24,25 @@ CREATE TABLE IF NOT EXISTS holidays (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create events table
+CREATE TABLE IF NOT EXISTS events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    event_name VARCHAR(200) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create event_responses table
+CREATE TABLE IF NOT EXISTS event_responses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    event_id INT NOT NULL,
+    member_id INT NOT NULL,
+    is_attending BOOLEAN NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    FOREIGN KEY (member_id) REFERENCES team_members(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_event_member (event_id, member_id)
+);
+
 -- Insert some default team members (you can modify these)
 INSERT INTO team_members (name, emoji) VALUES
     ('Alice Johnson', '👩'),

@@ -251,6 +251,93 @@ def delete_holiday(holiday_id):
     conn.close()
 
 
+def create_event(event_name):
+    """Create a new event."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO events (event_name) VALUES (%s)",
+            (event_name,)
+        )
+        conn.commit()
+        success = True
+        message = "Event created successfully!"
+    except mysql.connector.Error as e:
+        success = False
+        message = f"Error creating event: {str(e)}"
+    finally:
+        cursor.close()
+        conn.close()
+    return success, message
+
+
+def get_all_events():
+    """Fetch all events."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, event_name, created_at
+        FROM events
+        ORDER BY created_at DESC
+    """)
+    events = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return events
+
+
+def delete_event(event_id):
+    """Delete an event."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM events WHERE id = %s", (event_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def set_event_response(event_id, member_id, is_attending):
+    """Set or update a team member's response to an event."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO event_responses (event_id, member_id, is_attending)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE is_attending = %s
+        """, (event_id, member_id, is_attending, is_attending))
+        conn.commit()
+        success = True
+    except mysql.connector.Error as e:
+        success = False
+        print(f"Error setting event response: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()
+    return success
+
+
+def get_event_responses(event_id):
+    """Get all responses for an event."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            tm.id as member_id,
+            tm.name as member_name,
+            tm.emoji as member_emoji,
+            er.is_attending
+        FROM team_members tm
+        LEFT JOIN event_responses er ON tm.id = er.member_id AND er.event_id = %s
+        ORDER BY tm.name
+    """, (event_id,))
+    responses = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return responses
+
+
 def export_to_excel(df):
     """Export DataFrame to Excel file."""
     output = BytesIO()
@@ -316,7 +403,7 @@ st.sidebar.markdown("---")
 st.sidebar.info("💡 Tip: Use date range to quickly add multiple consecutive vacation days.")
 
 # Main content - Tabs
-tab1, tab2, tab3 = st.tabs(["📅 Calendar", "🎉 Holidays", "👥 Team Members"])
+tab1, tab2, tab3, tab4 = st.tabs(["📅 Calendar", "🎉 Holidays", "👥 Team Members", "🎪 Event Planning"])
 
 # Tab 1: Calendar View
 with tab1:
@@ -557,3 +644,79 @@ with tab3:
             st.rerun()
     else:
         st.info("No team members found.")
+
+# Tab 4: Event Planning
+with tab4:
+    st.header("Event Planning")
+
+    # Add event section
+    st.subheader("Create Event")
+    event_name_input = st.text_input("Event Name", placeholder="e.g., Team Dinner, Sprint Planning", key="event_name")
+
+    if st.button("Create Event"):
+        if event_name_input:
+            success, message = create_event(event_name_input)
+            if success:
+                st.success(message)
+                st.rerun()
+            else:
+                st.error(message)
+        else:
+            st.error("Please enter an event name.")
+
+    st.markdown("---")
+
+    # Display events and responses
+    st.subheader("Events")
+    all_events = get_all_events()
+
+    if not all_events:
+        st.info("No events created yet.")
+    else:
+        for event_id, event_name, created_at in all_events:
+            with st.expander(f"📌 {event_name}", expanded=True):
+                st.write(f"**Created:** {created_at.strftime('%Y-%m-%d %H:%M')}")
+
+                # Get responses for this event
+                responses = get_event_responses(event_id)
+
+                if not responses:
+                    st.info("No team members found.")
+                else:
+                    st.write("**Team Member Responses:**")
+
+                    # Display each team member with checkbox
+                    for member_id, member_name, member_emoji, is_attending in responses:
+                        col1, col2 = st.columns([3, 1])
+
+                        with col1:
+                            # Create a unique key for each checkbox
+                            checkbox_key = f"event_{event_id}_member_{member_id}"
+                            current_value = is_attending if is_attending is not None else False
+
+                            is_going = st.checkbox(
+                                f"{member_emoji} {member_name}",
+                                value=current_value,
+                                key=checkbox_key
+                            )
+
+                            # Update response if changed
+                            if is_going != current_value:
+                                set_event_response(event_id, member_id, is_going)
+                                st.rerun()
+
+                        with col2:
+                            if is_attending:
+                                st.write("✅ Going")
+                            elif is_attending is False:
+                                st.write("❌ Not going")
+                            else:
+                                st.write("⚪ No response")
+
+                st.markdown("---")
+
+                # Delete event button
+                if st.button(f"Delete Event", key=f"delete_event_{event_id}"):
+                    delete_event(event_id)
+                    st.success("Event deleted!")
+                    st.rerun()
