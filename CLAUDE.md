@@ -17,22 +17,21 @@ Team vacation planning application with Streamlit frontend, running in Docker wi
 - `team_members`: Stores team member names and emojis
 - `vacation_days`: Stores vacation dates with foreign key to team_members
 - `holidays`: Stores public holidays with date and name
+- `events`: Stores events for team planning
+- `event_responses`: Stores who is attending which event
+- `users`: Authentication (username + SHA-256 hashed password)
+- `schema_migrations`: Tracks which migrations have been applied
 
 ## Running the Application
 
-### Start Services
-```bash
-docker compose up --build
-```
+Use `make help` to see all commands. Key ones:
 
-### Stop Services
 ```bash
-docker compose down
-```
-
-### Stop and Remove Data
-```bash
-docker compose down -v
+make up        # Start all services
+make down      # Stop all services
+make restart   # Restart all services
+make migrate   # Run pending database migrations
+make clean     # Stop and remove all data
 ```
 
 ### Access the Application
@@ -40,6 +39,7 @@ docker compose down -v
 - **MySQL**: localhost:3306
 
 ### Default Credentials
+- **App login**: `hebo` / `hebo` (forced password change on first login)
 - MySQL Root Password: `rootpassword`
 - MySQL User: `vacation_user`
 - MySQL Password: `vacation_pass`
@@ -52,6 +52,7 @@ docker compose down -v
 - **Tab 1 - Calendar**: View vacation calendar with month/year selector, export to Excel
 - **Tab 2 - Holidays**: Add and delete holidays
 - **Tab 3 - Team Members**: Add and delete team members with custom emojis
+- **Tab 4 - Event Planning**: Create events, track attendance, share direct links
 
 ### Core Functionality
 - Create and manage team members with custom name and emoji (50+ emoji options)
@@ -67,19 +68,20 @@ docker compose down -v
 
 ### File Structure
 - `app.py`: Main Streamlit application
+- `migrate.py`: Database migration runner
+- `migrations/`: Numbered SQL migration files
 - `docker-compose.yml`: Service orchestration
 - `Dockerfile`: Streamlit app container definition
 - `requirements.txt`: Python dependencies
-- `init.sql`: Database initialization script
+- `init.sql`: Database initialization script (legacy, kept for fresh volumes)
+
+### Database Migrations
+
+Migrations run automatically on app startup via `migrate.py`. They are tracked in the `schema_migrations` table. To add a schema change, create the next numbered `.sql` file in `migrations/` (e.g. `003_add_something.sql`). Use `IF NOT EXISTS` / `ON DUPLICATE KEY` to keep migrations idempotent.
 
 ### Managing Team Members
 
 Team members can be added and deleted directly through the UI in the "Manage Team Members" section. Each member has a name and an emoji.
-
-Alternatively, edit `init.sql` and rebuild containers, or manually insert into the database:
-```sql
-INSERT INTO team_members (name, emoji) VALUES ('New Member', '🎯');
-```
 
 ### Database Access
 

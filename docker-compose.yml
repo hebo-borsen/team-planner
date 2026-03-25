@@ -16,8 +16,10 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
+      interval: 5s
+      timeout: 5s
       retries: 10
+      start_period: 10s
 
   streamlit:
     build: .
@@ -35,6 +37,8 @@ services:
         condition: service_healthy
     volumes:
       - ./app.py:/app/app.py
+      - ./migrate.py:/app/migrate.py
+      - ./migrations:/app/migrations
 
 volumes:
   mysql_data:

@@ -1,9 +1,14 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import mysql.connector
 import pandas as pd
+import calendar
+import hashlib
+import json
+import base64
 from datetime import datetime, timedelta
-import os
 from io import BytesIO
+import os
 
 # Database connection configuration
 DB_CONFIG = {
@@ -18,6 +23,35 @@ DB_CONFIG = {
 def get_db_connection():
     """Create a database connection."""
     return mysql.connector.connect(**DB_CONFIG)
+
+
+def hash_password(password):
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+
+def authenticate_user(username, password):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, username, must_change_password FROM users WHERE username = %s AND password_hash = %s",
+        (username, hash_password(password))
+    )
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return user
+
+
+def update_password(user_id, new_password):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET password_hash = %s, must_change_password = FALSE WHERE id = %s",
+        (hash_password(new_password), user_id)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 def get_team_members():
@@ -287,6 +321,20 @@ def get_all_events():
     return events
 
 
+def get_event_by_id(event_id):
+    """Fetch a single event by ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, event_name, created_at FROM events WHERE id = %s",
+        (event_id,)
+    )
+    event = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return event
+
+
 def delete_event(event_id):
     """Delete an event."""
     conn = get_db_connection()
@@ -347,9 +395,149 @@ def export_to_excel(df):
     return output
 
 
+def render_event_responses(event_id, responses):
+    """Render the response checkboxes for an event."""
+    for member_id, member_name, member_emoji, is_attending in responses:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            checkbox_key = f"event_{event_id}_member_{member_id}"
+            current_value = is_attending if is_attending is not None else False
+
+            is_going = st.checkbox(
+                f"{member_emoji} {member_name}",
+                value=current_value,
+                key=checkbox_key
+            )
+
+            if is_going != current_value:
+                set_event_response(event_id, member_id, is_going)
+                st.rerun()
+
+        with col2:
+            if is_attending:
+                st.write("✅ Going")
+            elif is_attending is False:
+                st.write("❌ Not going")
+            else:
+                st.write("⚪ No response")
+
+
+# ---------------------------------------------------------------------------
 # Streamlit UI
+# ---------------------------------------------------------------------------
 st.set_page_config(page_title="Team Vacation Planner", page_icon="🏖️", layout="wide")
 
+# Run migrations once per session
+if 'migrations_ran' not in st.session_state:
+    from migrate import run_migrations
+    run_migrations()
+    st.session_state['migrations_ran'] = True
+
+# ---------------------------------------------------------------------------
+# Authentication gate
+# ---------------------------------------------------------------------------
+if not st.session_state.get('authenticated', False):
+    st.title("🔒 Team Vacation Planner")
+    st.subheader("Please log in to continue")
+
+    with st.form("login_form"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Log in")
+
+        if submitted:
+            if username and password:
+                user = authenticate_user(username, password)
+                if user:
+                    st.session_state['authenticated'] = True
+                    st.session_state['user_id'] = user[0]
+                    st.session_state['username'] = user[1]
+                    st.session_state['must_change_password'] = bool(user[2])
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
+            else:
+                st.error("Please enter both username and password.")
+
+    st.stop()
+
+# ---------------------------------------------------------------------------
+# Force password change
+# ---------------------------------------------------------------------------
+if st.session_state.get('must_change_password', False):
+    st.title("🔑 Change your password")
+    st.info("You must set a new password before continuing.")
+
+    with st.form("change_password_form"):
+        new_password = st.text_input("New password", type="password")
+        confirm_password = st.text_input("Confirm new password", type="password")
+        submitted = st.form_submit_button("Set new password")
+
+        if submitted:
+            if not new_password:
+                st.error("Password cannot be empty.")
+            elif new_password != confirm_password:
+                st.error("Passwords do not match.")
+            elif len(new_password) < 4:
+                st.error("Password must be at least 4 characters.")
+            else:
+                update_password(st.session_state['user_id'], new_password)
+                st.session_state['must_change_password'] = False
+                st.success("Password updated!")
+                st.rerun()
+
+    st.stop()
+
+# ---------------------------------------------------------------------------
+# Route: Single event view  (?event=<id>)
+# ---------------------------------------------------------------------------
+event_id_param = st.query_params.get("event")
+
+if event_id_param:
+    try:
+        event = get_event_by_id(int(event_id_param))
+    except (ValueError, TypeError):
+        event = None
+
+    if event is None:
+        st.error("Event not found.")
+        st.page_link("/?tab=events", label="← Back to Event Planning")
+        st.stop()
+
+    event_id, event_name, created_at = event
+
+    st.title(f"📌 {event_name}")
+    st.caption(f"Created {created_at.strftime('%Y-%m-%d %H:%M')}")
+
+    st.page_link("/?tab=events", label="← Back to Event Planning")
+
+    st.markdown("---")
+
+    responses = get_event_responses(event_id)
+
+    if not responses:
+        st.info("No team members found.")
+        st.stop()
+
+    going = [r for r in responses if r[3]]
+    not_going = [r for r in responses if r[3] is not None and not r[3]]
+    no_response = [r for r in responses if r[3] is None]
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("✅ Going", len(going))
+    m2.metric("❌ Not going", len(not_going))
+    m3.metric("⚪ No response", len(no_response))
+
+    st.markdown("---")
+    st.subheader("Responses")
+    render_event_responses(event_id, responses)
+
+    st.stop()
+
+# ---------------------------------------------------------------------------
+# Normal app view
+# ---------------------------------------------------------------------------
 st.title("🏖️ Team Vacation Planner")
 
 # Sidebar for adding vacations
@@ -402,11 +590,41 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.info("💡 Tip: Use date range to quickly add multiple consecutive vacation days.")
 
-# Main content - Tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📅 Calendar", "🎉 Holidays", "👥 Team Members", "🎪 Event Planning"])
+st.sidebar.markdown("---")
+st.sidebar.write(f"Logged in as **{st.session_state.get('username', '')}**")
+if st.sidebar.button("Log out"):
+    st.session_state.clear()
+    st.rerun()
 
-# Tab 1: Calendar View
-with tab1:
+# ---------------------------------------------------------------------------
+# Tab navigation via query params
+# ---------------------------------------------------------------------------
+TAB_MAP = {
+    "calendar": "📅 Calendar",
+    "holidays": "🎉 Holidays",
+    "team": "👥 Team Members",
+    "events": "🎪 Event Planning",
+}
+
+current_tab = st.query_params.get("tab", "calendar")
+if current_tab not in TAB_MAP:
+    current_tab = "calendar"
+
+nav_cols = st.columns(len(TAB_MAP))
+for col, (key, label) in zip(nav_cols, TAB_MAP.items()):
+    with col:
+        button_type = "primary" if key == current_tab else "secondary"
+        if st.button(label, key=f"nav_{key}", use_container_width=True, type=button_type):
+            if key != current_tab:
+                st.query_params["tab"] = key
+                st.rerun()
+
+selected_tab = current_tab
+
+# ---------------------------------------------------------------------------
+# Tab: Calendar
+# ---------------------------------------------------------------------------
+if selected_tab == "calendar":
     st.header("Vacation Calendar")
 
     # Month/Year selector
@@ -432,8 +650,6 @@ with tab1:
     if not members:
         st.info("No team members found.")
     else:
-        # Calculate days in month
-        import calendar
         days_in_month = calendar.monthrange(selected_year, selected_month)[1]
 
         # Create holidays data structure
@@ -443,7 +659,7 @@ with tab1:
 
         # Create calendar data structure for vacations
         vacation_dict = {}
-        for member_id, member_name, vacation_date in vacations_data:
+        for mid, member_name, vacation_date in vacations_data:
             if member_name not in vacation_dict:
                 vacation_dict[member_name] = set()
             if vacation_date:
@@ -459,7 +675,7 @@ with tab1:
         calendar_data.append(holiday_row)
 
         # Team member rows
-        for member_id, member_name, member_emoji in members:
+        for mid, member_name, member_emoji in members:
             row = {'Team Member': f"{member_emoji} {member_name}"}
             member_vacations = vacation_dict.get(member_name, set())
             for day in range(1, days_in_month + 1):
@@ -472,10 +688,10 @@ with tab1:
         weekend_days = set()
         for day in range(1, days_in_month + 1):
             date = datetime(selected_year, selected_month, day)
-            if date.weekday() in [5, 6]:  # Saturday = 5, Sunday = 6
+            if date.weekday() in [5, 6]:
                 weekend_days.add(day)
 
-        # Style the dataframe - weekends always grey, then holidays green, vacation days blue
+        # Style the dataframe
         def highlight_cells(val, day):
             if day in weekend_days:
                 return 'background-color: #E8E8E8'
@@ -489,7 +705,6 @@ with tab1:
         for day in range(1, days_in_month + 1):
             styled_df = styled_df.applymap(lambda val, d=day: highlight_cells(val, d), subset=[str(day)])
 
-        # Display calendar
         st.dataframe(
             styled_df,
             use_container_width=True,
@@ -500,7 +715,6 @@ with tab1:
         # Export functionality
         st.markdown("---")
 
-        # Get all vacations for export
         all_vacations = get_all_vacations()
         if all_vacations:
             export_df = pd.DataFrame(all_vacations, columns=['Team Member', 'Vacation Date', 'ID'])
@@ -517,7 +731,7 @@ with tab1:
 
             st.write(f"**Total vacation days across all months:** {len(all_vacations)}")
 
-        # Optional: Delete vacation days
+        # Delete vacation days
         if all_vacations:
             with st.expander("Delete Vacation Day"):
                 st.write("Select a vacation day to delete:")
@@ -531,8 +745,10 @@ with tab1:
                     st.success("Vacation day deleted!")
                     st.rerun()
 
-# Tab 2: Holidays Management
-with tab2:
+# ---------------------------------------------------------------------------
+# Tab: Holidays
+# ---------------------------------------------------------------------------
+elif selected_tab == "holidays":
     st.header("Manage Holidays")
 
     # Add holiday section
@@ -593,15 +809,16 @@ with tab2:
     else:
         st.info("No holidays added yet.")
 
-# Tab 3: Team Members Management
-with tab3:
+# ---------------------------------------------------------------------------
+# Tab: Team Members
+# ---------------------------------------------------------------------------
+elif selected_tab == "team":
     st.header("Manage Team Members")
 
     # Add team member section
     st.subheader("Add Team Member")
     new_member_name = st.text_input("Member Name", placeholder="e.g., John Doe", key="new_member_name")
 
-    # Emoji selection
     emoji_options = [
         "👤", "👨", "👩", "👨‍💼", "👩‍💼", "👨‍💻", "👩‍💻", "👨‍🎨", "👩‍🎨",
         "👨‍🔬", "👩‍🔬", "👨‍🏫", "👩‍🏫", "👨‍⚕️", "👩‍⚕️", "👨‍🎓", "👩‍🎓",
@@ -645,8 +862,10 @@ with tab3:
     else:
         st.info("No team members found.")
 
-# Tab 4: Event Planning
-with tab4:
+# ---------------------------------------------------------------------------
+# Tab: Event Planning
+# ---------------------------------------------------------------------------
+elif selected_tab == "events":
     st.header("Event Planning")
 
     # Add event section
@@ -684,34 +903,7 @@ with tab4:
                     st.info("No team members found.")
                 else:
                     st.write("**Team Member Responses:**")
-
-                    # Display each team member with checkbox
-                    for member_id, member_name, member_emoji, is_attending in responses:
-                        col1, col2 = st.columns([3, 1])
-
-                        with col1:
-                            # Create a unique key for each checkbox
-                            checkbox_key = f"event_{event_id}_member_{member_id}"
-                            current_value = is_attending if is_attending is not None else False
-
-                            is_going = st.checkbox(
-                                f"{member_emoji} {member_name}",
-                                value=current_value,
-                                key=checkbox_key
-                            )
-
-                            # Update response if changed
-                            if is_going != current_value:
-                                set_event_response(event_id, member_id, is_going)
-                                st.rerun()
-
-                        with col2:
-                            if is_attending:
-                                st.write("✅ Going")
-                            elif is_attending is False:
-                                st.write("❌ Not going")
-                            else:
-                                st.write("⚪ No response")
+                    render_event_responses(event_id, responses)
 
                 st.markdown("---")
 
@@ -719,30 +911,14 @@ with tab4:
                 btn_col1, btn_col2 = st.columns([1, 1])
 
                 with btn_col1:
+                    event_url = f"/?event={event_id}"
                     if st.button("📤 Share Event", key=f"share_event_{event_id}"):
-                        going = [f"  {emoji} {name}" for mid, name, emoji, att in responses if att]
-                        not_going = [f"  {emoji} {name}" for mid, name, emoji, att in responses if att is not None and not att]
-                        no_response = [f"  {emoji} {name}" for mid, name, emoji, att in responses if att is None]
+                        st.session_state[f"show_share_{event_id}"] = not st.session_state.get(f"show_share_{event_id}", False)
 
-                        summary = f"📌 {event_name}\n"
-                        summary += f"Created: {created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
-
-                        if going:
-                            summary += f"✅ Going ({len(going)}):\n" + "\n".join(going) + "\n\n"
-                        if not_going:
-                            summary += f"❌ Not going ({len(not_going)}):\n" + "\n".join(not_going) + "\n\n"
-                        if no_response:
-                            summary += f"⚪ No response ({len(no_response)}):\n" + "\n".join(no_response) + "\n"
-
-                        st.session_state[f"share_text_{event_id}"] = summary
-
-                    if f"share_text_{event_id}" in st.session_state:
-                        st.text_area(
-                            "Copy the summary below:",
-                            value=st.session_state[f"share_text_{event_id}"],
-                            height=200,
-                            key=f"share_textarea_{event_id}"
-                        )
+                    if st.session_state.get(f"show_share_{event_id}"):
+                        st.markdown("**Direct link to this event:**")
+                        st.code(event_url, language=None)
+                        st.page_link(event_url, label="Open event page")
 
                 with btn_col2:
                     if st.button("Delete Event", key=f"delete_event_{event_id}"):
