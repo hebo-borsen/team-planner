@@ -1,0 +1,30 @@
+{% if holidays %}
+<table class="w-full text-sm">
+    <thead>
+        <tr class="border-b border-gray-200 dark:border-gray-700">
+            <th class="text-left py-2 font-medium">Date</th>
+            <th class="text-left py-2 font-medium">Name</th>
+            <th class="text-right py-2 font-medium">Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for hdate, hname, hid in holidays %}
+        <tr class="border-b border-gray-100 dark:border-gray-700/50">
+            <td class="py-2">{{ hdate|fmtdate }}</td>
+            <td class="py-2">{{ hname }}</td>
+            <td class="py-2 text-right">
+                <button hx-delete="/holidays/{{ hid }}"
+                        hx-target="#holiday-list"
+                        hx-swap="innerHTML"
+                        hx-confirm="Delete this holiday?"
+                        class="text-red-600 dark:text-red-400 hover:underline text-xs">
+                    Delete
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="text-sm text-gray-500 dark:text-gray-400">No holidays added yet.</p>
+{% endif %}

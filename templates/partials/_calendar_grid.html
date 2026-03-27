@@ -1,0 +1,64 @@
+<div class="overflow-x-auto">
+    <table class="min-w-full text-sm border border-gray-200 dark:border-gray-700">
+        <thead>
+            <tr class="bg-green-50 dark:bg-green-900/20">
+                <th class="px-3 py-1.5 text-left font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-green-50 dark:bg-green-900/20 z-10 whitespace-nowrap">
+                    National Holidays
+                </th>
+                {% for day in days %}
+                <th class="px-1 text-center border border-gray-200 dark:border-gray-700 min-w-[2.5rem]
+                    {{ 'bg-green-500 text-white' if day in holiday_dict else '' }}"
+                    {% if day in holiday_dict %}title="{{ holiday_dict[day] }}"{% endif %}>
+                    {% if day in holiday_dict %}
+                    <div class="h-20 flex items-end justify-center pb-1">
+                        <span class="text-[10px] font-bold whitespace-nowrap" style="writing-mode: vertical-rl; transform: rotate(180deg);">{{ holiday_dict[day] }}</span>
+                    </div>
+                    {% endif %}
+                </th>
+                {% endfor %}
+            </tr>
+            <tr class="bg-gray-100 dark:bg-gray-800">
+                <th class="px-3 py-2 text-left font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-gray-100 dark:bg-gray-800 z-10">
+                </th>
+                {% for day in days %}
+                <th class="px-1 py-1 text-center font-medium border border-gray-200 dark:border-gray-700 min-w-[2.5rem]
+                    {{ 'bg-gray-200 dark:bg-gray-700' if day in weekend_days else '' }}
+                    {{ 'bg-green-100 dark:bg-green-900/30' if day in holiday_dict and day not in weekend_days else '' }}"
+                    title="{{ day|fmtdate }}">
+                    {% if day.day == 1 or loop.first %}
+                    <div class="text-[10px] text-gray-500 dark:text-gray-400 font-normal leading-tight">{{ day.strftime('%b') }}</div>
+                    {% endif %}
+                    <div class="leading-tight">{{ day.day }}</div>
+                    <div class="text-[10px] text-gray-400 dark:text-gray-500 font-normal leading-tight">{{ day.strftime('%a')[:2] }}</div>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for uid, uname, udisplay_name, uinitials, ufont in users %}
+            {% set display = udisplay_name or uname %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td class="px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-900 z-10 whitespace-nowrap"
+                    {% if ufont %}style="font-family: '{{ ufont }}', cursive;"{% endif %}>
+                    {{ display }}
+                </td>
+                {% set user_vacs = vacation_dict.get(display, []) %}
+                {% set user_pending = pending_dict.get(display, []) %}
+                {% set user_removal = removal_dict.get(display, []) %}
+                {% for day in days %}
+                <td class="px-1 py-1.5 text-center border border-gray-200 dark:border-gray-700
+                    {{ 'bg-gray-200 dark:bg-gray-700' if day in weekend_days else '' }}
+                    {{ 'bg-green-100 dark:bg-green-900/30' if day in holiday_dict and day not in weekend_days and day not in user_vacs and day not in user_pending and day not in user_removal else '' }}
+                    {{ 'bg-blue-500 text-white font-bold' if day in user_vacs and day not in user_removal else '' }}
+                    {{ 'bg-amber-300 dark:bg-amber-600 text-amber-900 dark:text-amber-100 font-bold' if day in user_pending else '' }}
+                    {{ 'bg-blue-500 text-white font-bold ring-2 ring-red-500 ring-inset' if day in user_removal else '' }}"
+                    {% if day in user_pending %}title="Pending approval"{% endif %}
+                    {% if day in user_removal %}title="Removal requested"{% endif %}>
+                    {{ 'V' if day in user_vacs and day not in user_removal else '' }}{{ '?' if day in user_pending else '' }}{{ 'V' if day in user_removal else '' }}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

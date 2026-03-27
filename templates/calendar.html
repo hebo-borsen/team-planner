@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+    <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Vacation Summary {{ current_year }}</h2>
+    <div class="flex items-center gap-6">
+        <div>
+            <span class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ vacation_summary.used }}</span>
+            <span class="text-sm text-gray-500 dark:text-gray-400">used</span>
+        </div>
+        {% if vacation_summary.pending > 0 %}
+        <div>
+            <span class="text-2xl font-bold text-amber-500">{{ vacation_summary.pending }}</span>
+            <span class="text-sm text-gray-500 dark:text-gray-400">pending</span>
+        </div>
+        {% endif %}
+        <div>
+            <span class="text-2xl font-bold text-green-600 dark:text-green-400">{{ vacation_summary.remaining }}</span>
+            <span class="text-sm text-gray-500 dark:text-gray-400">remaining</span>
+        </div>
+        <div>
+            <span class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ vacation_summary.accrued }}</span>
+            <span class="text-sm text-gray-500 dark:text-gray-400">earned so far</span>
+        </div>
+        <div class="text-sm text-gray-400 dark:text-gray-500">
+            of {{ vacation_summary.days_off_per_year }} days
+        </div>
+    </div>
+</div>
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">Vacation Calendar</h1>
+    <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-1">
+            {% for p in presets %}
+            <a href="/?from={{ p.from }}&to={{ p.to }}"
+               class="px-3 py-1.5 text-xs font-medium rounded-lg
+                      {{ 'bg-blue-600 text-white' if p.active else 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' }}">
+                {{ p.label }}
+            </a>
+            {% endfor %}
+        </div>
+        <div class="flex items-center space-x-1">
+            <label for="cal-from" class="text-sm font-medium">From</label>
+            <input type="date" name="from" id="cal-from" value="{{ start_date.isoformat() }}"
+                   hx-get="/" hx-target="#calendar-grid" hx-include="#cal-to" hx-push-url="true"
+                   class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+        </div>
+        <div class="flex items-center space-x-1">
+            <label for="cal-to" class="text-sm font-medium">To</label>
+            <input type="date" name="to" id="cal-to" value="{{ end_date.isoformat() }}"
+                   hx-get="/" hx-target="#calendar-grid" hx-include="#cal-from" hx-push-url="true"
+                   class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+        </div>
+    </div>
+</div>
+
+<div id="calendar-grid">
+    {% include "partials/_calendar_grid.html" %}
+</div>
+
+<div class="flex items-center gap-3 mt-3 text-xs text-gray-500 dark:text-gray-400">
+    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-blue-500"></span> Approved</span>
+    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-amber-300 dark:bg-amber-600"></span> Pending</span>
+    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-blue-500 ring-2 ring-red-500 ring-inset"></span> Removal requested</span>
+</div>
+
+<div class="flex items-center justify-between mt-4">
+    <div class="text-sm text-gray-500 dark:text-gray-400">
+        {% if total_vacations > 0 %}
+        Total approved vacation days: <strong>{{ total_vacations }}</strong>
+        <a href="/vacations/export" class="ml-2 text-green-600 dark:text-green-400 hover:underline">Export to Excel</a>
+        {% endif %}
+    </div>
+    <button onclick="document.getElementById('vacation-modal').classList.remove('hidden')"
+            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg text-sm">
+        + {{ 'Add Vacation' if is_admin else 'Request Vacation' }}
+    </button>
+</div>
+
+<!-- Add Vacation Modal -->
+<div id="vacation-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">{{ 'Add Vacation' if is_admin else 'Request Vacation' }}</h2>
+            <button onclick="document.getElementById('vacation-modal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+        </div>
+        <form method="post" action="/vacations" class="space-y-4">
+            {% if is_admin %}
+            <div>
+                <label class="block text-sm font-medium mb-1">User</label>
+                <select name="user_id" required
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+                    <option value="">Select user...</option>
+                    {% for uid, uname, udisplay_name, uinitials, ufont in users %}
+                    <option value="{{ uid }}">{{ udisplay_name or uname }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% else %}
+            <input type="hidden" name="user_id" value="{{ user_id }}">
+            {% endif %}
+            <div>
+                <label class="block text-sm font-medium mb-1">Start Date</label>
+                <input type="date" name="vacation_date" required
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">End Date</label>
+                <input type="date" name="end_date"
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button type="button" onclick="document.getElementById('vacation-modal').classList.add('hidden')"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                    {{ 'Add Vacation' if is_admin else 'Request Vacation' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

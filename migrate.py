@@ -1,13 +1,6 @@
 import os
 import mysql.connector
-
-DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': int(os.getenv('DB_PORT', 3306)),
-    'database': os.getenv('DB_NAME', 'vacation_db'),
-    'user': os.getenv('DB_USER', 'vacation_user'),
-    'password': os.getenv('DB_PASSWORD', 'vacation_pass')
-}
+from db import DB_CONFIG
 
 MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), 'migrations')
 
@@ -47,7 +40,14 @@ def run_migrations():
         for statement in sql.split(';'):
             statement = statement.strip()
             if statement:
-                cursor.execute(statement)
+                try:
+                    cursor.execute(statement)
+                except mysql.connector.errors.ProgrammingError as e:
+                    # Ignore "Duplicate column name" (1060) for idempotent ALTER TABLE
+                    if e.errno == 1060:
+                        print(f"  Skipping (column already exists): {e.msg}")
+                    else:
+                        raise
 
         try:
             cursor.execute(

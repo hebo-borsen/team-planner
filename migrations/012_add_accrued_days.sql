@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN accrued_days DECIMAL(5,1) DEFAULT NULL;

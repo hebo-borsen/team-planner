@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Event Planning</h1>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+    <h2 class="text-lg font-semibold mb-3">Create Event</h2>
+    <form method="post" action="/events" class="flex items-end space-x-3">
+        <div class="flex-1">
+            <label class="block text-sm font-medium mb-1">Event Name</label>
+            <input type="text" name="event_name" required placeholder="e.g., Team Dinner, Sprint Planning"
+                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+        </div>
+        <button type="submit"
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg whitespace-nowrap">
+            Create Event
+        </button>
+    </form>
+</div>
+
+<div id="event-list" class="space-y-4">
+    {% if not events %}
+    <p class="text-sm text-gray-500 dark:text-gray-400">No events created yet.</p>
+    {% endif %}
+
+    {% for eid, ename, created_at, responses in events %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h3 class="text-lg font-semibold">{{ ename }}</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Created {{ created_at|fmtdatetime }}</p>
+            </div>
+            <div class="flex items-center space-x-2">
+                <a href="/events/{{ eid }}"
+                   class="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded">
+                    View / Share
+                </a>
+                <button hx-delete="/events/{{ eid }}"
+                        hx-target="body"
+                        hx-confirm="Delete this event?"
+                        class="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded">
+                    Delete
+                </button>
+            </div>
+        </div>
+
+        {% if responses %}
+        <div id="responses-{{ eid }}">
+            {% include "partials/_event_responses.html" with context %}
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-500 dark:text-gray-400">No team members found.</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

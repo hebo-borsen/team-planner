@@ -1,6 +1,6 @@
 # Team Planner
 
-Team vacation planning application with a Streamlit frontend and MySQL database, running in Docker.
+Team vacation planning application built with Flask, HTMX, and Tailwind CSS, backed by MySQL and running in Docker.
 
 ## Local development
 
@@ -16,7 +16,7 @@ make up
 
 This builds and starts all containers. Once ready, the app is available at:
 
-- **Streamlit UI**: http://localhost:8501
+- **Web UI**: http://localhost:5000
 - **MySQL**: localhost:3306
 
 Run `make help` to see all available commands.
@@ -26,7 +26,7 @@ Run `make help` to see all available commands.
 ```bash
 make restart    # Restart all services
 make logs       # Follow logs from all services
-make logs-app   # Follow Streamlit app logs only
+make logs-app   # Follow app logs only
 make shell-app  # Open a shell in the app container
 make shell-db   # Open a MySQL prompt
 make clean      # Stop services and remove all data
@@ -34,7 +34,7 @@ make clean      # Stop services and remove all data
 
 ### Login
 
-Default user: `hebo` / `hebo` (you will be asked to set a new password on first login).
+The app requires authentication. Register a new account on the login screen, or use the default user created by the initial migration.
 
 ### Database migrations
 
@@ -62,7 +62,7 @@ The application is deployed as Docker containers via Docker Compose. The same `d
 
 The stack consists of two services:
 
-- **streamlit** - Python 3.11 slim image running the Streamlit app
+- **web** - Python 3.11 slim image running Flask via Gunicorn
 - **mysql** - MySQL 8.0 with a persistent volume for data storage
 
 The database is initialised automatically from `init.sql` on first start.

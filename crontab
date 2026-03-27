@@ -1,0 +1,1 @@
+0 2 * * * cd /app && python cron_recalculate.py >> /proc/1/fd/1 2>&1

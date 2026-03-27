@@ -4,13 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Team vacation planning application with Streamlit frontend, running in Docker with Docker Compose and MySQL database.
+Team vacation planning application built with Flask + HTMX + Tailwind CSS, running in Docker with Docker Compose and MySQL database.
 
 ## Architecture
 
-- **Streamlit App** (`app.py`): Frontend UI for vacation management
-- **MySQL Database**: Stores team members and vacation days
+- **Flask App** (`app.py`): All routes, auth decorators, and request handling in a single file
+- **Database layer** (`db.py`): All database queries in one place
+- **Templates** (`templates/`): Jinja2 templates with Tailwind CSS styling
+- **Partials** (`templates/partials/`): HTMX partial templates for dynamic updates
+- **MySQL Database**: Stores all persistent data
 - **Docker Compose**: Orchestrates both services with health checks
+
+### File Structure
+
+```
+app.py                          # Flask app — all routes, auth decorators
+db.py                           # All database functions (auth, vacations, holidays, events, operation log)
+migrate.py                      # Database migration runner
+cron_recalculate.py             # Nightly cron: recalculates accrued days, logs to operation_log
+migrations/                     # Numbered SQL migration files
+templates/
+  base.html                     # Base layout: nav, Tailwind CDN, HTMX CDN, dark mode, flash messages
+  login.html                    # Login form
+  register.html                 # Registration form
+  force_password.html           # Forced password change
+  calendar.html                 # Vacation calendar (home page)
+  holidays.html                 # Holiday management
+  events.html                   # Event list + RSVP
+  event_detail.html             # Single event view (share page)
+  profile.html                  # Profile + password change
+  partials/
+    _calendar_grid.html         # Calendar table (HTMX: month/year switch)
+    _holiday_list.html          # Holiday list (HTMX: add/delete)
+    _event_responses.html       # RSVP section (HTMX: toggle)
+```
+
+### Key Conventions
+
+- **`app.py` contains all routes.** This is a small app (~15 routes), no blueprints needed.
+- **`db.py` owns all SQL.** Routes call functions from `db.py` — they never create their own database connections.
+- **Templates extend `base.html`.** Auth pages (login, register, force_password) override the `nav` block to hide the nav bar.
+- **Partials are for HTMX.** Files in `templates/partials/` are returned by HTMX endpoints and do NOT extend `base.html`.
+- **HTMX for interactive updates.** Delete buttons, RSVP toggles, and calendar navigation use HTMX. Form submissions use standard POST-redirect-GET.
+- **Keep imports at the top** of each file, to keep the code clean and readable.
+- **Date format is `1. feb - 2026`**. All user-facing dates use the `|fmtdate` Jinja2 filter (e.g. `{{ date|fmtdate }}`). For dates with time, use `|fmtdatetime` (e.g. `1. feb - 2026 14:30`). HTML `<input type="date">` values must stay in ISO format (required by browsers).
 
 ### Database Schema
 
@@ -19,8 +56,15 @@ Team vacation planning application with Streamlit frontend, running in Docker wi
 - `holidays`: Stores public holidays with date and name
 - `events`: Stores events for team planning
 - `event_responses`: Stores who is attending which event
-- `users`: Authentication (username + SHA-256 hashed password)
+- `users`: Authentication (shortname stored as `username`, hashed password, email, display_name, theme, role, accrued_days)
+- `operation_log`: Audit log with nullable `user_id`, `operation_type` (e.g. `holiday_recalculation`, `setting_update`), and `message`
 - `schema_migrations`: Tracks which migrations have been applied
+
+### Database Migrations
+
+Migrations run automatically on app startup via `migrate.py`. They are tracked in the `schema_migrations` table. To add a schema change, create the next numbered `.sql` file in `migrations/` (e.g. `006_add_something.sql`). Keep migrations idempotent — the runner tolerates duplicate column errors (MySQL 1060).
+
+**Important:** MySQL does not support `ADD COLUMN IF NOT EXISTS`. Plain `ALTER TABLE ... ADD COLUMN` is fine — the migration runner handles duplicate column errors gracefully.
 
 ## Running the Application
 
@@ -31,57 +75,26 @@ make up        # Start all services
 make down      # Stop all services
 make restart   # Restart all services
 make migrate   # Run pending database migrations
-make clean     # Stop and remove all data
+make cron-run        # Run the nightly recalculation manually
+make cron-logs       # Follow cron container logs
+make clean           # Stop and remove all data
+make nuclear-restart # Wipe database, rebuild, and start fresh
 ```
 
+### Cron Jobs
+
+A dedicated `cron` Docker container runs `cron_recalculate.py` nightly at 02:00. It recalculates each user's accrued holiday days (`days_off_per_year * day_of_year / days_in_year`), saves the value to `users.accrued_days`, and logs a full snapshot (entitlement, accrued, used, pending, remaining) to the `operation_log` table. Use `make cron-run` to trigger it manually.
+
 ### Access the Application
-- **Streamlit UI**: http://localhost:8501
+- **Web UI**: http://localhost:5000
 - **MySQL**: localhost:3306
 
 ### Default Credentials
-- **App login**: `hebo` / `hebo` (forced password change on first login)
+- **App login**: Register at `/register` — the first user created automatically becomes admin
 - MySQL Root Password: `rootpassword`
 - MySQL User: `vacation_user`
 - MySQL Password: `vacation_pass`
 - Database Name: `vacation_db`
-
-## Features
-
-### UI Structure
-- **Sidebar**: Add vacations for team members (primary action)
-- **Tab 1 - Calendar**: View vacation calendar with month/year selector, export to Excel
-- **Tab 2 - Holidays**: Add and delete holidays
-- **Tab 3 - Team Members**: Add and delete team members with custom emojis
-- **Tab 4 - Event Planning**: Create events, track attendance, share direct links
-
-### Core Functionality
-- Create and manage team members with custom name and emoji (50+ emoji options)
-- Select team member from dropdown (displays with emoji)
-- Add single vacation days or date ranges
-- Add public holidays with names (single day or date range)
-- View calendar with holidays (green), vacations (blue), and weekends (light grey)
-- Month/year selector to navigate calendar
-- Export vacation schedule to Excel
-- Delete vacation days, holidays, and team members
-
-## Development
-
-### File Structure
-- `app.py`: Main Streamlit application
-- `migrate.py`: Database migration runner
-- `migrations/`: Numbered SQL migration files
-- `docker-compose.yml`: Service orchestration
-- `Dockerfile`: Streamlit app container definition
-- `requirements.txt`: Python dependencies
-- `init.sql`: Database initialization script (legacy, kept for fresh volumes)
-
-### Database Migrations
-
-Migrations run automatically on app startup via `migrate.py`. They are tracked in the `schema_migrations` table. To add a schema change, create the next numbered `.sql` file in `migrations/` (e.g. `003_add_something.sql`). Use `IF NOT EXISTS` / `ON DUPLICATE KEY` to keep migrations idempotent.
-
-### Managing Team Members
-
-Team members can be added and deleted directly through the UI in the "Manage Team Members" section. Each member has a name and an emoji.
 
 ### Database Access
 

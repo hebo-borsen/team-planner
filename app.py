@@ -1,927 +1,714 @@
-import streamlit as st
-import streamlit.components.v1 as components
-import mysql.connector
-import pandas as pd
-import calendar
-import hashlib
-import json
-import base64
-from datetime import datetime, timedelta
-from io import BytesIO
 import os
-
-# Database connection configuration
-DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': int(os.getenv('DB_PORT', 3306)),
-    'database': os.getenv('DB_NAME', 'vacation_db'),
-    'user': os.getenv('DB_USER', 'vacation_user'),
-    'password': os.getenv('DB_PASSWORD', 'vacation_pass')
-}
-
-
-def get_db_connection():
-    """Create a database connection."""
-    return mysql.connector.connect(**DB_CONFIG)
-
-
-def hash_password(password):
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
-
-
-def authenticate_user(username, password):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT id, username, must_change_password FROM users WHERE username = %s AND password_hash = %s",
-        (username, hash_password(password))
-    )
-    user = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return user
-
-
-def update_password(user_id, new_password):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE users SET password_hash = %s, must_change_password = FALSE WHERE id = %s",
-        (hash_password(new_password), user_id)
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
-def get_team_members():
-    """Fetch all team members from the database."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name, emoji FROM team_members ORDER BY name")
-    members = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return members
-
-
-def add_team_member(name, emoji):
-    """Add a new team member."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "INSERT INTO team_members (name, emoji) VALUES (%s, %s)",
-            (name, emoji)
-        )
-        conn.commit()
-        success = True
-        message = "Team member added successfully!"
-    except mysql.connector.IntegrityError:
-        success = False
-        message = "A team member with this name already exists."
-    finally:
-        cursor.close()
-        conn.close()
-    return success, message
-
-
-def delete_team_member(member_id):
-    """Delete a team member."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM team_members WHERE id = %s", (member_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
-def add_vacation_day(member_id, vacation_date):
-    """Add a single vacation day for a team member."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "INSERT INTO vacation_days (member_id, vacation_date) VALUES (%s, %s)",
-            (member_id, vacation_date)
-        )
-        conn.commit()
-        success = True
-        message = "Vacation day added successfully!"
-    except mysql.connector.IntegrityError:
-        success = False
-        message = "This vacation day already exists."
-    finally:
-        cursor.close()
-        conn.close()
-    return success, message
-
-
-def add_vacation_range(member_id, start_date, end_date):
-    """Add a range of vacation days for a team member."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    current_date = start_date
-    added_count = 0
-    skipped_count = 0
-
-    while current_date <= end_date:
-        try:
-            cursor.execute(
-                "INSERT INTO vacation_days (member_id, vacation_date) VALUES (%s, %s)",
-                (member_id, current_date)
-            )
-            added_count += 1
-        except mysql.connector.IntegrityError:
-            skipped_count += 1
-
-        current_date += timedelta(days=1)
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return added_count, skipped_count
-
-
-def get_all_vacations():
-    """Fetch all vacation days with team member names."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT
-            tm.name as member_name,
-            vd.vacation_date,
-            vd.id
-        FROM vacation_days vd
-        JOIN team_members tm ON vd.member_id = tm.id
-        ORDER BY vd.vacation_date DESC, tm.name
-    """)
-    vacations = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return vacations
-
-
-def get_vacations_for_month(year, month):
-    """Fetch all vacation days for a specific month."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT
-            tm.id,
-            tm.name as member_name,
-            vd.vacation_date
-        FROM team_members tm
-        LEFT JOIN vacation_days vd ON tm.id = vd.member_id
-            AND YEAR(vd.vacation_date) = %s
-            AND MONTH(vd.vacation_date) = %s
-        ORDER BY tm.name, vd.vacation_date
-    """, (year, month))
-    vacations = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return vacations
-
-
-def delete_vacation(vacation_id):
-    """Delete a vacation day."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM vacation_days WHERE id = %s", (vacation_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
-def add_holiday(holiday_date, holiday_name):
-    """Add a holiday."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "INSERT INTO holidays (holiday_date, holiday_name) VALUES (%s, %s)",
-            (holiday_date, holiday_name)
-        )
-        conn.commit()
-        success = True
-        message = "Holiday added successfully!"
-    except mysql.connector.IntegrityError:
-        success = False
-        message = "This holiday date already exists."
-    finally:
-        cursor.close()
-        conn.close()
-    return success, message
-
-
-def add_holiday_range(start_date, end_date, holiday_name):
-    """Add a range of holiday days."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    current_date = start_date
-    added_count = 0
-    skipped_count = 0
-
-    while current_date <= end_date:
-        try:
-            cursor.execute(
-                "INSERT INTO holidays (holiday_date, holiday_name) VALUES (%s, %s)",
-                (current_date, holiday_name)
-            )
-            added_count += 1
-        except mysql.connector.IntegrityError:
-            skipped_count += 1
-
-        current_date += timedelta(days=1)
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return added_count, skipped_count
-
-
-def get_holidays_for_month(year, month):
-    """Fetch all holidays for a specific month."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT holiday_date, holiday_name, id
-        FROM holidays
-        WHERE YEAR(holiday_date) = %s AND MONTH(holiday_date) = %s
-        ORDER BY holiday_date
-    """, (year, month))
-    holidays = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return holidays
-
-
-def get_all_holidays():
-    """Fetch all holidays."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT holiday_date, holiday_name, id
-        FROM holidays
-        ORDER BY holiday_date DESC
-    """)
-    holidays = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return holidays
-
-
-def delete_holiday(holiday_id):
-    """Delete a holiday."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM holidays WHERE id = %s", (holiday_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
-def create_event(event_name):
-    """Create a new event."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "INSERT INTO events (event_name) VALUES (%s)",
-            (event_name,)
-        )
-        conn.commit()
-        success = True
-        message = "Event created successfully!"
-    except mysql.connector.Error as e:
-        success = False
-        message = f"Error creating event: {str(e)}"
-    finally:
-        cursor.close()
-        conn.close()
-    return success, message
-
-
-def get_all_events():
-    """Fetch all events."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, event_name, created_at
-        FROM events
-        ORDER BY created_at DESC
-    """)
-    events = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return events
-
-
-def get_event_by_id(event_id):
-    """Fetch a single event by ID."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT id, event_name, created_at FROM events WHERE id = %s",
-        (event_id,)
-    )
-    event = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return event
-
-
-def delete_event(event_id):
-    """Delete an event."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM events WHERE id = %s", (event_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
-def set_event_response(event_id, member_id, is_attending):
-    """Set or update a team member's response to an event."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            INSERT INTO event_responses (event_id, member_id, is_attending)
-            VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE is_attending = %s
-        """, (event_id, member_id, is_attending, is_attending))
-        conn.commit()
-        success = True
-    except mysql.connector.Error as e:
-        success = False
-        print(f"Error setting event response: {str(e)}")
-    finally:
-        cursor.close()
-        conn.close()
-    return success
-
-
-def get_event_responses(event_id):
-    """Get all responses for an event."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT
-            tm.id as member_id,
-            tm.name as member_name,
-            tm.emoji as member_emoji,
-            er.is_attending
-        FROM team_members tm
-        LEFT JOIN event_responses er ON tm.id = er.member_id AND er.event_id = %s
-        ORDER BY tm.name
-    """, (event_id,))
-    responses = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return responses
-
-
-def export_to_excel(df):
-    """Export DataFrame to Excel file."""
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Vacations')
-    output.seek(0)
-    return output
-
-
-def render_event_responses(event_id, responses):
-    """Render the response checkboxes for an event."""
-    for member_id, member_name, member_emoji, is_attending in responses:
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-            checkbox_key = f"event_{event_id}_member_{member_id}"
-            current_value = is_attending if is_attending is not None else False
-
-            is_going = st.checkbox(
-                f"{member_emoji} {member_name}",
-                value=current_value,
-                key=checkbox_key
-            )
-
-            if is_going != current_value:
-                set_event_response(event_id, member_id, is_going)
-                st.rerun()
-
-        with col2:
-            if is_attending:
-                st.write("✅ Going")
-            elif is_attending is False:
-                st.write("❌ Not going")
-            else:
-                st.write("⚪ No response")
+import secrets
+from datetime import datetime, date, timedelta
+from functools import wraps
+from io import BytesIO
+
+from flask import (
+    Flask, render_template, request, redirect, url_for,
+    session, flash, make_response
+)
+from openpyxl import Workbook
+
+import db
+from migrate import run_migrations
+
+# ---------------------------------------------------------------------------
+# App setup
+# ---------------------------------------------------------------------------
+
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+
+run_migrations()
 
 
 # ---------------------------------------------------------------------------
-# Streamlit UI
+# Template filters
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="Team Vacation Planner", page_icon="🏖️", layout="wide")
 
-# Run migrations once per session
-if 'migrations_ran' not in st.session_state:
-    from migrate import run_migrations
-    run_migrations()
-    st.session_state['migrations_ran'] = True
+@app.template_filter('fmtdate')
+def format_date(value):
+    """Format a date as '1. feb - 2026'."""
+    if not value:
+        return ''
+    return f"{value.day}. {value.strftime('%b').lower()} - {value.year}"
+
+
+@app.template_filter('fmtdatetime')
+def format_datetime(value):
+    """Format a datetime as '1. feb - 2026 14:30'."""
+    if not value:
+        return ''
+    return f"{value.day}. {value.strftime('%b').lower()} - {value.year} {value.strftime('%H:%M')}"
+
 
 # ---------------------------------------------------------------------------
-# Authentication gate
+# Error handlers
 # ---------------------------------------------------------------------------
-if not st.session_state.get('authenticated', False):
-    st.title("🔒 Team Vacation Planner")
-    st.subheader("Please log in to continue")
 
-    with st.form("login_form"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Log in")
+@app.errorhandler(500)
+def internal_error(e):
+    import traceback
+    tb = traceback.format_exception(type(e), e, e.__traceback__)
+    return render_template('error.html', error=''.join(tb)), 500
 
-        if submitted:
-            if username and password:
-                user = authenticate_user(username, password)
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    if app.debug:
+        raise e
+    import traceback
+    tb = traceback.format_exception(type(e), e, e.__traceback__)
+    return render_template('error.html', error=''.join(tb)), 500
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def is_htmx():
+    return request.headers.get('HX-Request') == 'true'
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            token = request.cookies.get('session_token')
+            if token:
+                user = db.get_user_by_session_token(token)
                 if user:
-                    st.session_state['authenticated'] = True
-                    st.session_state['user_id'] = user[0]
-                    st.session_state['username'] = user[1]
-                    st.session_state['must_change_password'] = bool(user[2])
-                    st.rerun()
+                    session['user_id'] = user[0]
+                    session['username'] = user[1]
+                    session['must_change_password'] = bool(user[2])
+                    session['theme'] = user[3] or 'light'
+                    session['role'] = user[4] or 'user'
+                    session['initials'] = user[5] or user[1]
+                    session['font'] = user[6] or ''
                 else:
-                    st.error("Invalid username or password.")
+                    return redirect(url_for('login'))
             else:
-                st.error("Please enter both username and password.")
+                return redirect(url_for('login'))
+        if session.get('must_change_password'):
+            return redirect(url_for('force_password'))
+        return f(*args, **kwargs)
+    return decorated
 
-    st.stop()
+
+def admin_required(f):
+    @wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        if session.get('role') != 'admin':
+            flash('Permission denied.', 'error')
+            return redirect(url_for('calendar_view'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.context_processor
+def inject_globals():
+    is_admin = session.get('role') == 'admin'
+    return {
+        'theme': session.get('theme', 'light'),
+        'user_id': session.get('user_id'),
+        'username': session.get('username', ''),
+        'initials': session.get('initials', session.get('username', '')),
+        'user_font': session.get('font', ''),
+        'is_admin': is_admin,
+        'pending_count': db.get_pending_count() if is_admin and session.get('user_id') else 0,
+        'active_tab': request.endpoint or '',
+    }
+
 
 # ---------------------------------------------------------------------------
-# Force password change
+# Auth routes
 # ---------------------------------------------------------------------------
-if st.session_state.get('must_change_password', False):
-    st.title("🔑 Change your password")
-    st.info("You must set a new password before continuing.")
 
-    with st.form("change_password_form"):
-        new_password = st.text_input("New password", type="password")
-        confirm_password = st.text_input("Confirm new password", type="password")
-        submitted = st.form_submit_button("Set new password")
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        if not username or not password:
+            flash('Please fill in all fields.', 'error')
+            return redirect(url_for('login'))
+        user = db.authenticate_user(username, password)
+        if user:
+            session['user_id'] = user[0]
+            session['username'] = user[1]
+            session['must_change_password'] = bool(user[2])
+            session['theme'] = user[3] or 'light'
+            session['role'] = user[4] or 'user'
+            session['initials'] = user[5] or user[1]
+            session['font'] = user[6] or ''
+            token = db.create_session_token(user[0])
+            resp = redirect(url_for('calendar_view'))
+            resp.set_cookie('session_token', token, max_age=2592000, httponly=True, samesite='Lax')
+            return resp
+        flash('Invalid username or password.', 'error')
+        return redirect(url_for('login'))
+    return render_template('login.html')
 
-        if submitted:
-            if not new_password:
-                st.error("Password cannot be empty.")
-            elif new_password != confirm_password:
-                st.error("Passwords do not match.")
-            elif len(new_password) < 4:
-                st.error("Password must be at least 4 characters.")
-            else:
-                update_password(st.session_state['user_id'], new_password)
-                st.session_state['must_change_password'] = False
-                st.success("Password updated!")
-                st.rerun()
 
-    st.stop()
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        shortname = request.form.get('shortname', '').strip()
+        display_name = request.form.get('display_name', '').strip()
+        email = request.form.get('email', '').strip() or None
+        font = request.form.get('font', '').strip() or None
+        password = request.form.get('password', '')
+        confirm = request.form.get('confirm', '')
+        if not shortname or not display_name or not password or not confirm:
+            flash('Please fill in all fields.', 'error')
+            return redirect(url_for('register'))
+        if password != confirm:
+            flash('Passwords do not match.', 'error')
+            return redirect(url_for('register'))
+        if len(password) < 4:
+            flash('Password must be at least 4 characters.', 'error')
+            return redirect(url_for('register'))
+        success, msg = db.register_user(shortname, password, display_name=display_name, email=email, font=font)
+        if success:
+            flash(msg, 'success')
+            return redirect(url_for('login'))
+        flash(msg, 'error')
+        return redirect(url_for('register'))
+    return render_template('register.html')
+
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    user_id = session.get('user_id')
+    if user_id:
+        db.clear_session_token(user_id)
+    session.clear()
+    resp = redirect(url_for('login'))
+    resp.delete_cookie('session_token')
+    return resp
+
+
+@app.route('/force-password', methods=['GET', 'POST'])
+def force_password():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        new_pw = request.form.get('new_password', '')
+        confirm = request.form.get('confirm_password', '')
+        if not new_pw:
+            flash('Password cannot be empty.', 'error')
+        elif new_pw != confirm:
+            flash('Passwords do not match.', 'error')
+        elif len(new_pw) < 4:
+            flash('Password must be at least 4 characters.', 'error')
+        else:
+            db.update_password(session['user_id'], new_pw)
+            session['must_change_password'] = False
+            flash('Password updated!', 'success')
+            return redirect(url_for('calendar_view'))
+        return redirect(url_for('force_password'))
+    return render_template('force_password.html')
+
 
 # ---------------------------------------------------------------------------
-# Route: Single event view  (?event=<id>)
+# Calendar (home)
 # ---------------------------------------------------------------------------
-event_id_param = st.query_params.get("event")
 
-if event_id_param:
-    try:
-        event = get_event_by_id(int(event_id_param))
-    except (ValueError, TypeError):
-        event = None
+@app.route('/')
+@login_required
+def calendar_view():
+    today = date.today()
 
-    if event is None:
-        st.error("Event not found.")
-        st.page_link("/?tab=events", label="← Back to Event Planning")
-        st.stop()
+    start_str = request.args.get('from')
+    end_str = request.args.get('to')
+    start_date = date.fromisoformat(start_str) if start_str else today
+    end_date = date.fromisoformat(end_str) if end_str else today + timedelta(days=29)
 
-    event_id, event_name, created_at = event
+    users = db.get_all_users_for_calendar()
+    vacations_data = db.get_vacations_for_date_range(start_date, end_date)
+    holidays_data = db.get_holidays_for_date_range(start_date, end_date)
 
-    st.title(f"📌 {event_name}")
-    st.caption(f"Created {created_at.strftime('%Y-%m-%d %H:%M')}")
+    days = []
+    current = start_date
+    while current <= end_date:
+        days.append(current)
+        current += timedelta(days=1)
 
-    st.page_link("/?tab=events", label="← Back to Event Planning")
+    holiday_dict = {}
+    for hdate, hname, hid in holidays_data:
+        holiday_dict[hdate] = hname
 
-    st.markdown("---")
+    vacation_dict = {}
+    pending_dict = {}
+    removal_dict = {}
+    for uid, display, vdate, status in vacations_data:
+        if not vdate:
+            continue
+        if status == 'approved':
+            vacation_dict.setdefault(display, set()).add(vdate)
+        elif status == 'pending':
+            pending_dict.setdefault(display, set()).add(vdate)
+        elif status == 'pending_removal':
+            removal_dict.setdefault(display, set()).add(vdate)
 
-    responses = get_event_responses(event_id)
+    weekend_days = set()
+    for d in days:
+        if d.weekday() in (5, 6):
+            weekend_days.add(d)
 
-    if not responses:
-        st.info("No team members found.")
-        st.stop()
+    total_vacations = db.get_vacation_count()
+    vacation_summary = db.get_vacation_summary(session['user_id'], today.year)
 
-    going = [r for r in responses if r[3]]
+    template_data = {
+        'start_date': start_date,
+        'end_date': end_date,
+        'days': days,
+        'users': users,
+        'holiday_dict': holiday_dict,
+        'vacation_dict': vacation_dict,
+        'pending_dict': pending_dict,
+        'removal_dict': removal_dict,
+        'weekend_days': weekend_days,
+        'total_vacations': total_vacations,
+        'vacation_summary': vacation_summary,
+        'current_year': today.year,
+        'presets': [
+            {'label': '7 days',  'from': today.isoformat(), 'to': (today + timedelta(days=6)).isoformat(),  'active': start_date == today and (end_date - start_date).days == 6},
+            {'label': '14 days', 'from': today.isoformat(), 'to': (today + timedelta(days=13)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 13},
+            {'label': '30 days', 'from': today.isoformat(), 'to': (today + timedelta(days=29)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 29},
+        ],
+        'active_tab': 'calendar_view',
+    }
+
+    if is_htmx():
+        return render_template('partials/_calendar_grid.html', **template_data)
+    return render_template('calendar.html', **template_data)
+
+
+@app.route('/vacations', methods=['POST'])
+@login_required
+def add_vacation():
+    user_id = request.form.get('user_id', type=int)
+    vacation_date = request.form.get('vacation_date')
+    end_date = request.form.get('end_date')
+    if not user_id or not vacation_date:
+        flash('Please select a user and date.', 'error')
+        return redirect(url_for('calendar_view'))
+    start = date.fromisoformat(vacation_date)
+    end = date.fromisoformat(end_date) if end_date else start
+    if start > end:
+        flash('End date must be after start date.', 'error')
+        return redirect(url_for('calendar_view'))
+    is_su = session.get('role') == 'admin'
+    requester = session.get('username', '')
+    added, skipped = db.add_vacation_for_user(user_id, start, end, is_admin=is_su, requested_by=requester)
+    if added:
+        if is_su:
+            flash(f'Added {added} vacation day(s)!', 'success')
+        else:
+            flash(f'Requested {added} vacation day(s) — pending approval.', 'info')
+    if skipped:
+        flash(f'Skipped {skipped} duplicate day(s).', 'info')
+    referer = request.form.get('redirect') or url_for('calendar_view')
+    return redirect(referer)
+
+
+@app.route('/vacations/<int:vacation_id>', methods=['DELETE'])
+@login_required
+def delete_vacation(vacation_id):
+    if session.get('role') == 'admin':
+        db.delete_vacation(vacation_id)
+        flash('Vacation day deleted.', 'success')
+    else:
+        success, msg = db.request_vacation_removal(vacation_id)
+        flash(msg, 'info' if success else 'warning')
+    return redirect(url_for('calendar_view'))
+
+
+@app.route('/vacations/export')
+@login_required
+def export_vacations():
+    all_vacations = db.get_all_vacations()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Vacations"
+    ws.append(["Team Member", "Vacation Date", "Status"])
+    for name, vdate, vid, status in all_vacations:
+        ws.append([name, format_date(vdate), status])
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    resp = make_response(output.read())
+    resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    resp.headers['Content-Disposition'] = f'attachment; filename=team_vacations_{datetime.now().strftime("%Y%m%d")}.xlsx'
+    return resp
+
+
+# ---------------------------------------------------------------------------
+# Vacation approvals (admin)
+# ---------------------------------------------------------------------------
+
+@app.route('/approvals')
+@admin_required
+def approvals():
+    pending = db.get_pending_requests()
+    return render_template('approvals.html', pending=pending, active_tab='approvals')
+
+
+@app.route('/approvals/<int:vacation_day_id>/approve', methods=['POST'])
+@admin_required
+def approve_vacation(vacation_day_id):
+    db.approve_vacation(vacation_day_id, session['username'])
+    pending = db.get_pending_requests()
+    if is_htmx():
+        return render_template('partials/_approval_list.html', pending=pending)
+    flash('Request approved.', 'success')
+    return redirect(url_for('approvals'))
+
+
+@app.route('/approvals/<int:vacation_day_id>/reject', methods=['POST'])
+@admin_required
+def reject_vacation(vacation_day_id):
+    db.reject_vacation(vacation_day_id)
+    pending = db.get_pending_requests()
+    if is_htmx():
+        return render_template('partials/_approval_list.html', pending=pending)
+    flash('Request rejected.', 'success')
+    return redirect(url_for('approvals'))
+
+
+# ---------------------------------------------------------------------------
+# My Vacations
+# ---------------------------------------------------------------------------
+
+@app.route('/my-vacations')
+@login_required
+def my_vacations():
+    vacations = db.get_user_vacations(session['user_id'])
+    return render_template('my_vacations.html', vacations=vacations, active_tab='my_vacations')
+
+
+@app.route('/vacations/<int:vacation_day_id>/request-removal', methods=['POST'])
+@login_required
+def request_removal(vacation_day_id):
+    if session.get('role') == 'admin':
+        db.delete_vacation(vacation_day_id)
+        flash('Vacation day deleted.', 'success')
+    else:
+        success, msg = db.request_vacation_removal(vacation_day_id)
+        flash(msg, 'info' if success else 'warning')
+    return redirect(url_for('my_vacations'))
+
+
+@app.route('/vacations/<int:vacation_day_id>/cancel', methods=['POST'])
+@login_required
+def cancel_request(vacation_day_id):
+    deleted = db.cancel_pending_request(vacation_day_id, session['username'])
+    if deleted:
+        flash('Pending request cancelled.', 'success')
+    else:
+        flash('Could not cancel request.', 'warning')
+    return redirect(url_for('my_vacations'))
+
+
+# ---------------------------------------------------------------------------
+# Holidays
+# ---------------------------------------------------------------------------
+
+@app.route('/holidays', methods=['GET'])
+@login_required
+def holidays():
+    all_holidays = db.get_all_holidays()
+    return render_template('holidays.html', holidays=all_holidays, active_tab='holidays')
+
+
+@app.route('/holidays', methods=['POST'])
+@login_required
+def add_holiday():
+    name = request.form.get('holiday_name', '').strip()
+    holiday_date = request.form.get('holiday_date')
+    end_date = request.form.get('end_date')
+    if not name:
+        flash('Please enter a holiday name.', 'error')
+        return redirect(url_for('holidays'))
+    if not holiday_date:
+        flash('Please select a date.', 'error')
+        return redirect(url_for('holidays'))
+    start = date.fromisoformat(holiday_date)
+    if end_date:
+        end = date.fromisoformat(end_date)
+        if start > end:
+            flash('End date must be after start date.', 'error')
+            return redirect(url_for('holidays'))
+        added, skipped = db.add_holiday_range(start, end, name)
+        if added:
+            flash(f'Added {added} holiday day(s)!', 'success')
+        if skipped:
+            flash(f'Skipped {skipped} duplicate day(s).', 'info')
+    else:
+        success, msg = db.add_holiday(start, name)
+        flash(msg, 'success' if success else 'warning')
+    return redirect(url_for('holidays'))
+
+
+@app.route('/holidays/<int:holiday_id>', methods=['DELETE'])
+@login_required
+def delete_holiday(holiday_id):
+    db.delete_holiday(holiday_id)
+    all_holidays = db.get_all_holidays()
+    return render_template('partials/_holiday_list.html', holidays=all_holidays)
+
+
+# ---------------------------------------------------------------------------
+# Events
+# ---------------------------------------------------------------------------
+
+@app.route('/events')
+@login_required
+def events():
+    all_events = db.get_all_events()
+    events_with_responses = []
+    for eid, ename, created_at in all_events:
+        responses = db.get_event_responses(eid)
+        events_with_responses.append((eid, ename, created_at, responses))
+    return render_template('events.html', events=events_with_responses, active_tab='events')
+
+
+@app.route('/events', methods=['POST'])
+@login_required
+def create_event():
+    name = request.form.get('event_name', '').strip()
+    if not name:
+        flash('Please enter an event name.', 'error')
+        return redirect(url_for('events'))
+    success, msg = db.create_event(name)
+    flash(msg, 'success' if success else 'error')
+    return redirect(url_for('events'))
+
+
+@app.route('/events/<int:event_id>', methods=['DELETE'])
+@login_required
+def delete_event(event_id):
+    db.delete_event(event_id)
+    if is_htmx():
+        all_events = db.get_all_events()
+        events_with_responses = []
+        for eid, ename, created_at in all_events:
+            responses = db.get_event_responses(eid)
+            events_with_responses.append((eid, ename, created_at, responses))
+        return render_template('events.html', events=events_with_responses, active_tab='events')
+    return redirect(url_for('events'))
+
+
+@app.route('/events/<int:event_id>')
+@login_required
+def event_detail(event_id):
+    event = db.get_event_by_id(event_id)
+    if not event:
+        flash('Event not found.', 'error')
+        return redirect(url_for('events'))
+    eid, ename, created_at = event
+    responses = db.get_event_responses(eid)
+    going = [r for r in responses if r[3] is True or r[3] == 1]
     not_going = [r for r in responses if r[3] is not None and not r[3]]
     no_response = [r for r in responses if r[3] is None]
+    return render_template('event_detail.html',
+                           event=event, responses=responses,
+                           going=len(going), not_going=len(not_going),
+                           no_response=len(no_response))
 
-    m1, m2, m3 = st.columns(3)
-    m1.metric("✅ Going", len(going))
-    m2.metric("❌ Not going", len(not_going))
-    m3.metric("⚪ No response", len(no_response))
 
-    st.markdown("---")
-    st.subheader("Responses")
-    render_event_responses(event_id, responses)
+@app.route('/events/<int:event_id>/rsvp', methods=['POST'])
+@login_required
+def rsvp(event_id):
+    member_id = request.form.get('member_id', type=int)
+    action = request.form.get('action')
+    if member_id and action in ('yes', 'no'):
+        db.set_event_response(event_id, member_id, action == 'yes')
+    responses = db.get_event_responses(event_id)
+    return render_template('partials/_event_responses.html',
+                           event_id=event_id, responses=responses)
 
-    st.stop()
-
-# ---------------------------------------------------------------------------
-# Normal app view
-# ---------------------------------------------------------------------------
-st.title("🏖️ Team Vacation Planner")
-
-# Sidebar for adding vacations
-st.sidebar.header("Add Vacation")
-
-# Get team members
-members = get_team_members()
-member_dict = {f"{emoji} {name}": id for id, name, emoji in members}
-member_names = list(member_dict.keys())
-
-if not member_names:
-    st.sidebar.error("No team members found. Please add team members below.")
-else:
-    selected_member = st.sidebar.selectbox("Select Team Member", member_names)
-    member_id = member_dict[selected_member]
-
-    # Tab for single day or date range
-    vacation_type = st.sidebar.radio("Vacation Type", ["Single Day", "Date Range"])
-
-    if vacation_type == "Single Day":
-        vacation_date = st.sidebar.date_input("Select Date")
-
-        if st.sidebar.button("Add Vacation Day"):
-            success, message = add_vacation_day(member_id, vacation_date)
-            if success:
-                st.sidebar.success(message)
-                st.rerun()
-            else:
-                st.sidebar.warning(message)
-
-    else:  # Date Range
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            start_date = st.date_input("Start Date")
-        with col2:
-            end_date = st.date_input("End Date")
-
-        if st.sidebar.button("Add Vacation Range"):
-            if start_date <= end_date:
-                added, skipped = add_vacation_range(member_id, start_date, end_date)
-                if added > 0:
-                    st.sidebar.success(f"Added {added} vacation day(s)!")
-                if skipped > 0:
-                    st.sidebar.info(f"Skipped {skipped} duplicate day(s).")
-                st.rerun()
-            else:
-                st.sidebar.error("End date must be after start date.")
-
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.info("💡 Tip: Use date range to quickly add multiple consecutive vacation days.")
-
-st.sidebar.markdown("---")
-st.sidebar.write(f"Logged in as **{st.session_state.get('username', '')}**")
-if st.sidebar.button("Log out"):
-    st.session_state.clear()
-    st.rerun()
 
 # ---------------------------------------------------------------------------
-# Tab navigation via query params
+# Profile
 # ---------------------------------------------------------------------------
-TAB_MAP = {
-    "calendar": "📅 Calendar",
-    "holidays": "🎉 Holidays",
-    "team": "👥 Team Members",
-    "events": "🎪 Event Planning",
-}
 
-current_tab = st.query_params.get("tab", "calendar")
-if current_tab not in TAB_MAP:
-    current_tab = "calendar"
+@app.route('/profile', methods=['GET'])
+@login_required
+def profile():
+    user_profile = db.get_user_profile(session['user_id'])
+    return render_template('profile.html', profile=user_profile, active_tab='profile')
 
-nav_cols = st.columns(len(TAB_MAP))
-for col, (key, label) in zip(nav_cols, TAB_MAP.items()):
-    with col:
-        button_type = "primary" if key == current_tab else "secondary"
-        if st.button(label, key=f"nav_{key}", use_container_width=True, type=button_type):
-            if key != current_tab:
-                st.query_params["tab"] = key
-                st.rerun()
 
-selected_tab = current_tab
+@app.route('/profile/update', methods=['POST'])
+@login_required
+def update_profile():
+    email = request.form.get('email', '').strip() or None
+    display_name = request.form.get('display_name', '').strip() or None
+    initials = request.form.get('initials', '').strip() or None
+    font = request.form.get('font', '').strip() or None
+    db.update_user_profile(session['user_id'], email, display_name, initials, font)
+    session['initials'] = initials or session.get('username', '')
+    session['font'] = font or ''
+    flash('Profile updated!', 'success')
+    return redirect(url_for('profile'))
 
-# ---------------------------------------------------------------------------
-# Tab: Calendar
-# ---------------------------------------------------------------------------
-if selected_tab == "calendar":
-    st.header("Vacation Calendar")
 
-    # Month/Year selector
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        selected_month = st.selectbox(
-            "Select Month",
-            range(1, 13),
-            index=datetime.now().month - 1,
-            format_func=lambda x: datetime(2000, x, 1).strftime('%B')
-        )
-    with col2:
-        selected_year = st.selectbox(
-            "Select Year",
-            range(datetime.now().year - 1, datetime.now().year + 3),
-            index=1
-        )
-
-    # Get vacations and holidays for selected month
-    vacations_data = get_vacations_for_month(selected_year, selected_month)
-    holidays_data = get_holidays_for_month(selected_year, selected_month)
-
-    if not members:
-        st.info("No team members found.")
+@app.route('/profile/password', methods=['POST'])
+@login_required
+def change_password():
+    user_profile = db.get_user_profile(session['user_id'])
+    username = user_profile[0] if user_profile else session.get('username', '')
+    current_pw = request.form.get('current_password', '')
+    new_pw = request.form.get('new_password', '')
+    confirm = request.form.get('confirm_password', '')
+    if not current_pw or not new_pw or not confirm:
+        flash('Please fill in all fields.', 'error')
+    elif new_pw != confirm:
+        flash('Passwords do not match.', 'error')
+    elif len(new_pw) < 4:
+        flash('Password must be at least 4 characters.', 'error')
+    elif not db.authenticate_user(username, current_pw):
+        flash('Current password is incorrect.', 'error')
     else:
-        days_in_month = calendar.monthrange(selected_year, selected_month)[1]
+        db.update_password(session['user_id'], new_pw)
+        flash('Password updated!', 'success')
+    return redirect(url_for('profile'))
 
-        # Create holidays data structure
-        holiday_days = {}
-        for holiday_date, holiday_name, holiday_id in holidays_data:
-            holiday_days[holiday_date.day] = holiday_name
-
-        # Create calendar data structure for vacations
-        vacation_dict = {}
-        for mid, member_name, vacation_date in vacations_data:
-            if member_name not in vacation_dict:
-                vacation_dict[member_name] = set()
-            if vacation_date:
-                vacation_dict[member_name].add(vacation_date.day)
-
-        # Build calendar DataFrame
-        calendar_data = []
-
-        # First row: Holidays
-        holiday_row = {'Team Member': '🎉 Holidays'}
-        for day in range(1, days_in_month + 1):
-            holiday_row[str(day)] = 'H' if day in holiday_days else ''
-        calendar_data.append(holiday_row)
-
-        # Team member rows
-        for mid, member_name, member_emoji in members:
-            row = {'Team Member': f"{member_emoji} {member_name}"}
-            member_vacations = vacation_dict.get(member_name, set())
-            for day in range(1, days_in_month + 1):
-                row[str(day)] = 'V' if day in member_vacations else ''
-            calendar_data.append(row)
-
-        calendar_df = pd.DataFrame(calendar_data)
-
-        # Determine which days are weekends
-        weekend_days = set()
-        for day in range(1, days_in_month + 1):
-            date = datetime(selected_year, selected_month, day)
-            if date.weekday() in [5, 6]:
-                weekend_days.add(day)
-
-        # Style the dataframe
-        def highlight_cells(val, day):
-            if day in weekend_days:
-                return 'background-color: #E8E8E8'
-            elif val == 'H':
-                return 'background-color: #4CAF50; color: white; font-weight: bold'
-            elif val == 'V':
-                return 'background-color: #4A90E2; color: white; font-weight: bold'
-            return ''
-
-        styled_df = calendar_df.style
-        for day in range(1, days_in_month + 1):
-            styled_df = styled_df.applymap(lambda val, d=day: highlight_cells(val, d), subset=[str(day)])
-
-        st.dataframe(
-            styled_df,
-            use_container_width=True,
-            hide_index=True,
-            height=400
-        )
-
-        # Export functionality
-        st.markdown("---")
-
-        all_vacations = get_all_vacations()
-        if all_vacations:
-            export_df = pd.DataFrame(all_vacations, columns=['Team Member', 'Vacation Date', 'ID'])
-            export_df = export_df[['Team Member', 'Vacation Date']].copy()
-            export_df['Vacation Date'] = pd.to_datetime(export_df['Vacation Date']).dt.strftime('%Y-%m-%d')
-
-            excel_file = export_to_excel(export_df)
-            st.download_button(
-                label="📥 Export All Vacations to Excel",
-                data=excel_file,
-                file_name=f"team_vacations_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-            st.write(f"**Total vacation days across all months:** {len(all_vacations)}")
-
-        # Delete vacation days
-        if all_vacations:
-            with st.expander("Delete Vacation Day"):
-                st.write("Select a vacation day to delete:")
-                delete_options = [f"{row[0]} - {row[1]}" for row in all_vacations]
-                vacation_to_delete = st.selectbox("Vacation Day", delete_options)
-
-                if st.button("Delete Selected Vacation"):
-                    vacation_index = delete_options.index(vacation_to_delete)
-                    vacation_id = all_vacations[vacation_index][2]
-                    delete_vacation(vacation_id)
-                    st.success("Vacation day deleted!")
-                    st.rerun()
 
 # ---------------------------------------------------------------------------
-# Tab: Holidays
+# User management (admin)
 # ---------------------------------------------------------------------------
-elif selected_tab == "holidays":
-    st.header("Manage Holidays")
 
-    # Add holiday section
-    st.subheader("Add Holiday")
-    holiday_name = st.text_input("Holiday Name", placeholder="e.g., Christmas", key="holiday_name")
-    holiday_type = st.radio("Holiday Type", ["Single Day", "Date Range"], key="holiday_type")
+@app.route('/users')
+@admin_required
+def user_management():
+    users = db.get_all_users()
+    return render_template('users.html', all_users=users,
+                           active_tab='user_management')
 
-    if holiday_type == "Single Day":
-        holiday_date = st.date_input("Holiday Date", key="holiday_date")
 
-        if st.button("Add Holiday"):
-            if holiday_name:
-                success, message = add_holiday(holiday_date, holiday_name)
-                if success:
-                    st.success(message)
-                    st.rerun()
-                else:
-                    st.warning(message)
-            else:
-                st.error("Please enter a holiday name.")
+@app.route('/users/<int:user_id>/role', methods=['POST'])
+@admin_required
+def set_user_role(user_id):
+    new_role = request.form.get('role')
+    if new_role not in ('admin', 'user'):
+        flash('Invalid role.', 'error')
+        return redirect(url_for('user_management'))
+    if user_id == session.get('user_id') and new_role != 'admin':
+        flash('You cannot remove your own admin role.', 'error')
+        return redirect(url_for('user_management'))
+    db.set_user_role(user_id, new_role)
+    flash('Role updated.', 'success')
+    return redirect(url_for('user_management'))
 
-    else:  # Date Range
-        col1, col2 = st.columns(2)
-        with col1:
-            holiday_start_date = st.date_input("Start Date", key="holiday_start")
-        with col2:
-            holiday_end_date = st.date_input("End Date", key="holiday_end")
 
-        if st.button("Add Holiday Range"):
-            if holiday_name:
-                if holiday_start_date <= holiday_end_date:
-                    added, skipped = add_holiday_range(holiday_start_date, holiday_end_date, holiday_name)
-                    if added > 0:
-                        st.success(f"Added {added} holiday day(s)!")
-                    if skipped > 0:
-                        st.info(f"Skipped {skipped} duplicate day(s).")
-                    st.rerun()
-                else:
-                    st.error("End date must be after start date.")
-            else:
-                st.error("Please enter a holiday name.")
+@app.route('/users/<int:user_id>/days-off', methods=['POST'])
+@admin_required
+def set_days_off(user_id):
+    days_off = request.form.get('days_off', type=int)
+    if days_off is None or days_off < 0:
+        flash('Invalid number of days.', 'error')
+        return redirect(url_for('user_management'))
+    db.update_days_off(user_id, days_off)
+    flash('Days off updated.', 'success')
+    return redirect(url_for('user_management'))
 
-    # Delete holidays section
-    st.markdown("---")
-    st.subheader("Delete Holidays")
-    all_holidays = get_all_holidays()
-    if all_holidays:
-        st.write("Select a holiday to delete:")
-        holiday_delete_options = [f"{row[1]} - {row[0]}" for row in all_holidays]
-        holiday_to_delete = st.selectbox("Holiday", holiday_delete_options, key="tab2_holiday")
 
-        if st.button("Delete Selected Holiday", key="tab2_delete_holiday"):
-            holiday_index = holiday_delete_options.index(holiday_to_delete)
-            holiday_id = all_holidays[holiday_index][2]
-            delete_holiday(holiday_id)
-            st.success("Holiday deleted!")
-            st.rerun()
+@app.route('/users/<int:user_id>/password', methods=['POST'])
+@admin_required
+def admin_change_password(user_id):
+    new_pw = request.form.get('new_password', '')
+    confirm = request.form.get('confirm_password', '')
+    if not new_pw or not confirm:
+        flash('Please fill in all password fields.', 'error')
+    elif new_pw != confirm:
+        flash('Passwords do not match.', 'error')
+    elif len(new_pw) < 4:
+        flash('Password must be at least 4 characters.', 'error')
     else:
-        st.info("No holidays added yet.")
+        db.update_password(user_id, new_pw)
+        flash('Password changed.', 'success')
+    return redirect(url_for('user_management'))
+
 
 # ---------------------------------------------------------------------------
-# Tab: Team Members
+# Settings (admin)
 # ---------------------------------------------------------------------------
-elif selected_tab == "team":
-    st.header("Manage Team Members")
 
-    # Add team member section
-    st.subheader("Add Team Member")
-    new_member_name = st.text_input("Member Name", placeholder="e.g., John Doe", key="new_member_name")
+@app.route('/settings')
+@admin_required
+def settings():
+    periods = db.get_holiday_periods()
+    period_id = request.args.get('period_id', type=int) or db.get_current_period_id()
+    holidays = db.get_period_holidays(period_id) if period_id else []
+    return render_template('settings.html', periods=periods,
+                           selected_period_id=period_id, holidays=holidays,
+                           active_tab='settings')
 
-    emoji_options = [
-        "👤", "👨", "👩", "👨‍💼", "👩‍💼", "👨‍💻", "👩‍💻", "👨‍🎨", "👩‍🎨",
-        "👨‍🔬", "👩‍🔬", "👨‍🏫", "👩‍🏫", "👨‍⚕️", "👩‍⚕️", "👨‍🎓", "👩‍🎓",
-        "🚀", "⭐", "💼", "💻", "🎨", "🔬", "📊", "🎯", "🏆", "💡",
-        "🌟", "🔥", "⚡", "🎪", "🎭", "🎬", "🎮", "🎸", "🎵", "⚽",
-        "🏀", "🎾", "🏐", "🏈", "⚾", "🎳", "🏓", "🥊", "🎿", "🏂"
-    ]
 
-    new_member_emoji = st.selectbox(
-        "Select Emoji",
-        emoji_options,
-        format_func=lambda x: f"{x}",
-        key="new_member_emoji"
-    )
+@app.route('/settings/holidays')
+@admin_required
+def settings_holidays():
+    period_id = request.args.get('period_id', type=int)
+    holidays = db.get_period_holidays(period_id) if period_id else []
+    return render_template('partials/_period_holidays.html',
+                           holidays=holidays, selected_period_id=period_id)
 
-    if st.button("Add Team Member"):
-        if new_member_name and new_member_emoji:
-            success, message = add_team_member(new_member_name, new_member_emoji)
-            if success:
-                st.success(message)
-                st.rerun()
-            else:
-                st.warning(message)
-        else:
-            st.error("Please enter a name.")
 
-    # Delete team member section
-    st.markdown("---")
-    st.subheader("Delete Team Member")
-    if members:
-        st.write("Select a team member to delete:")
-        delete_member_options = [f"{emoji} {name}" for id, name, emoji in members]
-        member_to_delete = st.selectbox("Team Member", delete_member_options, key="tab3_delete_member")
+@app.route('/settings/holidays/<int:holiday_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_holiday(holiday_id):
+    period_id = db.toggle_period_holiday(holiday_id)
+    holidays = db.get_period_holidays(period_id) if period_id else []
+    return render_template('partials/_period_holidays.html',
+                           holidays=holidays, selected_period_id=period_id)
 
-        if st.button("Delete Team Member", key="tab3_delete_member_btn"):
-            member_index = delete_member_options.index(member_to_delete)
-            member_id_to_delete = members[member_index][0]
-            delete_team_member(member_id_to_delete)
-            st.success("Team member deleted!")
-            st.rerun()
-    else:
-        st.info("No team members found.")
+
+@app.route('/settings/holidays/<int:holiday_id>/date', methods=['POST'])
+@admin_required
+def update_holiday_date(holiday_id):
+    new_date = request.form.get('holiday_date')
+    if not new_date:
+        return '', 400
+    period_id = db.update_period_holiday_date(holiday_id, date.fromisoformat(new_date))
+    holidays = db.get_period_holidays(period_id) if period_id else []
+    return render_template('partials/_period_holidays.html',
+                           holidays=holidays, selected_period_id=period_id)
+
 
 # ---------------------------------------------------------------------------
-# Tab: Event Planning
+# Logs (admin)
 # ---------------------------------------------------------------------------
-elif selected_tab == "events":
-    st.header("Event Planning")
 
-    # Add event section
-    st.subheader("Create Event")
-    event_name_input = st.text_input("Event Name", placeholder="e.g., Team Dinner, Sprint Planning", key="event_name")
+@app.route('/logs')
+@admin_required
+def logs():
+    user_id = request.args.get('user_id', type=int)
+    operation_type = request.args.get('operation_type')
+    entries = db.get_operation_log(limit=200, user_id=user_id, operation_type=operation_type)
+    users = db.get_all_users_basic()
+    return render_template('logs.html', entries=entries, users=users,
+                           filter_user_id=user_id, filter_operation_type=operation_type,
+                           active_tab='logs')
 
-    if st.button("Create Event"):
-        if event_name_input:
-            success, message = create_event(event_name_input)
-            if success:
-                st.success(message)
-                st.rerun()
-            else:
-                st.error(message)
-        else:
-            st.error("Please enter an event name.")
 
-    st.markdown("---")
+# ---------------------------------------------------------------------------
+# Theme toggle
+# ---------------------------------------------------------------------------
 
-    # Display events and responses
-    st.subheader("Events")
-    all_events = get_all_events()
-
-    if not all_events:
-        st.info("No events created yet.")
-    else:
-        for event_id, event_name, created_at in all_events:
-            with st.expander(f"📌 {event_name}", expanded=True):
-                st.write(f"**Created:** {created_at.strftime('%Y-%m-%d %H:%M')}")
-
-                # Get responses for this event
-                responses = get_event_responses(event_id)
-
-                if not responses:
-                    st.info("No team members found.")
-                else:
-                    st.write("**Team Member Responses:**")
-                    render_event_responses(event_id, responses)
-
-                st.markdown("---")
-
-                # Share and Delete buttons
-                btn_col1, btn_col2 = st.columns([1, 1])
-
-                with btn_col1:
-                    event_url = f"/?event={event_id}"
-                    if st.button("📤 Share Event", key=f"share_event_{event_id}"):
-                        st.session_state[f"show_share_{event_id}"] = not st.session_state.get(f"show_share_{event_id}", False)
-
-                    if st.session_state.get(f"show_share_{event_id}"):
-                        st.markdown("**Direct link to this event:**")
-                        st.code(event_url, language=None)
-                        st.page_link(event_url, label="Open event page")
-
-                with btn_col2:
-                    if st.button("Delete Event", key=f"delete_event_{event_id}"):
-                        delete_event(event_id)
-                        st.success("Event deleted!")
-                        st.rerun()
+@app.route('/theme/toggle', methods=['POST'])
+@login_required
+def toggle_theme():
+    current = session.get('theme', 'light')
+    new_theme = 'dark' if current == 'light' else 'light'
+    session['theme'] = new_theme
+    if session.get('user_id'):
+        db.update_user_theme(session['user_id'], new_theme)
+    resp = make_response('', 200)
+    resp.headers['HX-Redirect'] = request.referrer or '/'
+    return resp

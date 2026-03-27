@@ -2,16 +2,19 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for numpy and other packages
-RUN apt-get update && apt upgrade -y
-
 COPY requirements.txt .
-RUN pip3 install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y --no-install-recommends cron && rm -rf /var/lib/apt/lists/*
 
 COPY app.py .
+COPY db.py .
 COPY migrate.py .
+COPY cron_recalculate.py .
 COPY migrations/ ./migrations/
+COPY templates/ ./templates/
 
-EXPOSE 8501
+EXPOSE 5000
 
-CMD ["streamlit", "run", "app.py", "--server.address", "0.0.0.0"]
+ENV FLASK_APP=app.py
+
+CMD ["sh", "-c", "if [ \"$FLASK_DEBUG\" = '1' ]; then python -m flask run --host=0.0.0.0 --port=5000 --reload --debugger; else gunicorn --bind 0.0.0.0:5000 --workers 2 --reload app:app; fi"]

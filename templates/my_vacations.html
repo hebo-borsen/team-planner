@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">My Vacations</h1>
+    <button onclick="document.getElementById('request-modal').classList.remove('hidden')"
+            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg text-sm">
+        + Request Vacation
+    </button>
+</div>
+
+{% if vacations %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+        <thead>
+            <tr class="bg-gray-100 dark:bg-gray-700">
+                <th class="px-4 py-3 text-left font-medium">Date</th>
+                <th class="px-4 py-3 text-left font-medium">Status</th>
+                <th class="px-4 py-3 text-right font-medium">Action</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for vid, vdate, status, req_by, approved_by in vacations %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td class="px-4 py-3 font-medium">{{ vdate|fmtdate }}</td>
+                <td class="px-4 py-3">
+                    {% if status == 'approved' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
+                        Approved
+                    </span>
+                    {% elif status == 'pending' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                        Pending approval
+                    </span>
+                    {% elif status == 'pending_removal' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
+                        Removal pending
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right">
+                    {% if status == 'pending' %}
+                    <form method="post" action="/vacations/{{ vid }}/cancel" class="inline">
+                        <button type="submit"
+                                class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded">
+                            Cancel
+                        </button>
+                    </form>
+                    {% elif status == 'approved' %}
+                    <form method="post" action="/vacations/{{ vid }}/request-removal" class="inline">
+                        <button type="submit"
+                                class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded">
+                            Request Removal
+                        </button>
+                    </form>
+                    {% elif status == 'pending_removal' %}
+                    <span class="text-xs text-gray-400">Awaiting approval...</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-gray-500 dark:text-gray-400">
+    No vacation days found.
+</div>
+{% endif %}
+
+<!-- Request Vacation Modal -->
+<div id="request-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">Request Vacation</h2>
+            <button onclick="document.getElementById('request-modal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+        </div>
+        <form method="post" action="/vacations" class="space-y-4">
+            <input type="hidden" name="user_id" value="{{ user_id }}">
+            <input type="hidden" name="redirect" value="/my-vacations">
+            <div>
+                <label class="block text-sm font-medium mb-1">Start Date</label>
+                <input type="date" name="vacation_date" required
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">End Date</label>
+                <input type="date" name="end_date"
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Weekends and public holidays are excluded automatically.</p>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button type="button" onclick="document.getElementById('request-modal').classList.add('hidden')"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                    Request Vacation
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

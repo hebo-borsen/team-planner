@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Users</h1>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+        <thead>
+            <tr class="bg-gray-100 dark:bg-gray-700">
+                <th class="px-4 py-3 text-left font-medium">Shortname</th>
+                <th class="px-4 py-3 text-left font-medium">Name</th>
+                <th class="px-4 py-3 text-left font-medium">Email</th>
+                <th class="px-4 py-3 text-left font-medium">Role</th>
+                <th class="px-4 py-3 text-center font-medium">Days off / year</th>
+                <th class="px-4 py-3 text-center font-medium">Earned so far</th>
+                <th class="px-4 py-3 text-right font-medium">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for uid, uname, udisplay, uemail, urole, udays_off, uaccrued in all_users %}
+            {% set udays = udays_off if udays_off is not none else 25 %}
+            {% set accrued = uaccrued if uaccrued is not none else 0.0 %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td class="px-4 py-3 font-medium">{{ uname }}</td>
+                <td class="px-4 py-3 text-gray-500 dark:text-gray-400">{{ udisplay or '-' }}</td>
+                <td class="px-4 py-3 text-gray-500 dark:text-gray-400">{{ uemail or '-' }}</td>
+                <td class="px-4 py-3">
+                    {% if urole == 'admin' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200">
+                        Admin
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                        User
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <form method="post" action="/users/{{ uid }}/days-off" class="inline-flex items-center gap-1">
+                        <input type="number" name="days_off" value="{{ udays }}" min="0" max="365"
+                               data-original="{{ udays }}"
+                               oninput="this.nextElementSibling.classList.toggle('hidden', this.value == this.dataset.original)"
+                               class="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm text-center">
+                        <button type="submit"
+                                class="hidden px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded">
+                            Save
+                        </button>
+                    </form>
+                </td>
+                <td class="px-4 py-3 text-center text-gray-500 dark:text-gray-400">
+                    {{ accrued }}
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <div class="inline-flex gap-2">
+                        <button onclick="document.getElementById('pw-modal-{{ uid }}').classList.remove('hidden')"
+                                class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded">
+                            Change Password
+                        </button>
+                        {% if urole == 'admin' and uid != user_id %}
+                        <form method="post" action="/users/{{ uid }}/role" class="inline">
+                            <input type="hidden" name="role" value="user">
+                            <button type="submit"
+                                    class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded">
+                                Remove Admin
+                            </button>
+                        </form>
+                        {% elif urole != 'admin' %}
+                        <form method="post" action="/users/{{ uid }}/role" class="inline">
+                            <input type="hidden" name="role" value="admin">
+                            <button type="submit"
+                                    class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded">
+                                Make Admin
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% for uid, uname, udisplay, uemail, urole, udays_off, uaccrued in all_users %}
+<div id="pw-modal-{{ uid }}" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">Change Password for {{ udisplay or uname }}</h2>
+            <button onclick="document.getElementById('pw-modal-{{ uid }}').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+        </div>
+        <form method="post" action="/users/{{ uid }}/password" class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium mb-1">New Password</label>
+                <input type="password" name="new_password" required
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Confirm Password</label>
+                <input type="password" name="confirm_password" required
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button type="button" onclick="document.getElementById('pw-modal-{{ uid }}').classList.add('hidden')"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                    Change Password
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

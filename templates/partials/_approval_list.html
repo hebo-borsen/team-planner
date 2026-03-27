@@ -1,0 +1,56 @@
+{% if pending %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+        <thead>
+            <tr class="bg-gray-100 dark:bg-gray-700">
+                <th class="px-4 py-3 text-left font-medium">User</th>
+                <th class="px-4 py-3 text-left font-medium">Date</th>
+                <th class="px-4 py-3 text-left font-medium">Type</th>
+                <th class="px-4 py-3 text-left font-medium">Requested by</th>
+                <th class="px-4 py-3 text-right font-medium">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for vid, display, vdate, status, req_by, created_at in pending %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td class="px-4 py-3 font-medium">{{ display }}</td>
+                <td class="px-4 py-3">{{ vdate|fmtdate }}</td>
+                <td class="px-4 py-3">
+                    {% if status == 'pending' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                        New request
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
+                        Removal request
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-gray-500 dark:text-gray-400">{{ req_by or '-' }}</td>
+                <td class="px-4 py-3 text-right">
+                    <div class="inline-flex gap-2">
+                        <button hx-post="/approvals/{{ vid }}/approve"
+                                hx-target="#approval-list"
+                                hx-swap="innerHTML"
+                                class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded">
+                            Approve
+                        </button>
+                        <button hx-post="/approvals/{{ vid }}/reject"
+                                hx-target="#approval-list"
+                                hx-swap="innerHTML"
+                                hx-confirm="Are you sure you want to reject this request?"
+                                class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded">
+                            Reject
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-gray-500 dark:text-gray-400">
+    No pending requests.
+</div>
+{% endif %}

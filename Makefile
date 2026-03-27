@@ -1,4 +1,6 @@
-.PHONY: help up down restart build logs logs-app logs-db shell-app shell-db clean status migrate
+.PHONY: help up down restart build logs logs-app logs-db shell-app shell-db clean nuclear-restart ps migrate test cron-run cron-logs
+
+#-- Meta
 
 help: ## Show this help message
 	@grep -E '^[1-9a-zA-Z_ -]+:.*?## .*$$|(^#--)' $(MAKEFILE_LIST) \
@@ -8,13 +10,13 @@ help: ## Show this help message
 #-- Local development
 
 up: ## Start all services
-	docker compose up --build -d
+	docker compose up -d
 	@echo "\n\033[32mStarted!\033[0m"
-	@echo "  Streamlit UI:  http://localhost:8501"
-	@echo "  MySQL:         localhost:3306"
+	@echo "  Web UI:  http://localhost:5000"
+	@echo "  MySQL:   localhost:3306"
 
 up-fg: ## Start all services in foreground
-	docker compose up --build
+	docker compose up
 
 down: ## Stop all services
 	docker compose down --remove-orphans
@@ -34,8 +36,8 @@ ps: ## Show status of all services
 logs: ## Follow logs from all services
 	docker compose logs -f
 
-logs-app: ## Follow Streamlit app logs
-	docker compose logs -f streamlit
+logs-app: ## Follow app logs
+	docker compose logs -f web
 
 logs-db: ## Follow MySQL logs
 	docker compose logs -f mysql
@@ -53,7 +55,27 @@ shell-app: ## Open a shell in the app container
 shell-db: ## Open a MySQL prompt
 	docker exec -it vacation_mysql mysql -u vacation_user -pvacation_pass vacation_db
 
+#-- Testing
+
+test: ## Run tests inside the app container
+	docker exec vacation_app python -m pytest tests/ -v
+
+#-- Cron
+
+cron-run: ## Run the vacation recalculation manually
+	docker exec vacation_app python cron_recalculate.py
+
+cron-logs: ## Follow cron container logs
+	docker compose logs -f cron
+
 #-- Cleanup
 
 clean: ## Stop services and remove all data
 	docker compose down -v
+
+nuclear-restart: ## Wipe database, rebuild, and start fresh with migrations
+	docker compose down -v
+	@printf "SECRET_KEY=%s\n" "$$(openssl rand -hex 32)" > .env
+	docker compose up -d --build
+	@echo "\n\033[32mNuclear restart complete! Migrations run automatically on app startup.\033[0m"
+	@echo "  Web UI:  http://localhost:5000"
