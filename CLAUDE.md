@@ -75,15 +75,9 @@ make up        # Start all services
 make down      # Stop all services
 make restart   # Restart all services
 make migrate   # Run pending database migrations
-make cron-run        # Run the nightly recalculation manually
-make cron-logs       # Follow cron container logs
 make clean           # Stop and remove all data
 make nuclear-restart # Wipe database, rebuild, and start fresh
 ```
-
-### Cron Jobs
-
-A dedicated `cron` Docker container runs `cron_recalculate.py` nightly at 02:00. It recalculates each user's accrued holiday days (`days_off_per_year * day_of_year / days_in_year`), saves the value to `users.accrued_days`, and logs a full snapshot (entitlement, accrued, used, pending, remaining) to the `operation_log` table. Use `make cron-run` to trigger it manually.
 
 ### Access the Application
 - **Web UI**: http://localhost:5000

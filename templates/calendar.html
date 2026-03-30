@@ -1,33 +1,6 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
-    <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">Vacation Summary {{ current_year }}</h2>
-    <div class="flex items-center gap-6">
-        <div>
-            <span class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ vacation_summary.used }}</span>
-            <span class="text-sm text-gray-500 dark:text-gray-400">used</span>
-        </div>
-        {% if vacation_summary.pending > 0 %}
-        <div>
-            <span class="text-2xl font-bold text-amber-500">{{ vacation_summary.pending }}</span>
-            <span class="text-sm text-gray-500 dark:text-gray-400">pending</span>
-        </div>
-        {% endif %}
-        <div>
-            <span class="text-2xl font-bold text-green-600 dark:text-green-400">{{ vacation_summary.remaining }}</span>
-            <span class="text-sm text-gray-500 dark:text-gray-400">remaining</span>
-        </div>
-        <div>
-            <span class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ vacation_summary.accrued }}</span>
-            <span class="text-sm text-gray-500 dark:text-gray-400">earned so far</span>
-        </div>
-        <div class="text-sm text-gray-400 dark:text-gray-500">
-            of {{ vacation_summary.days_off_per_year }} days
-        </div>
-    </div>
-</div>
-
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">Vacation Calendar</h1>
     <div class="flex items-center space-x-3">
@@ -52,8 +25,39 @@
                    hx-get="/" hx-target="#calendar-grid" hx-include="#cal-from" hx-push-url="true"
                    class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
         </div>
+        <button id="fullwidth-toggle" onclick="toggleFullWidth()" title="Toggle full width"
+                class="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path id="fw-expand" stroke-linecap="round" stroke-linejoin="round"
+                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/>
+                <path id="fw-collapse" class="hidden" stroke-linecap="round" stroke-linejoin="round"
+                      d="M9 4v5H4M15 4v5h5M4 15h5v5M20 15h-5v5"/>
+            </svg>
+        </button>
     </div>
 </div>
+<script>
+function toggleFullWidth() {
+    var el = document.getElementById('main-container');
+    var expand = document.getElementById('fw-expand');
+    var collapse = document.getElementById('fw-collapse');
+    var isWide = !el.classList.contains('max-w-7xl');
+    el.classList.toggle('max-w-7xl', isWide);
+    expand.classList.toggle('hidden', !isWide);
+    collapse.classList.toggle('hidden', isWide);
+    localStorage.setItem('calendarFullWidth', isWide ? '' : '1');
+}
+(function() {
+    if (localStorage.getItem('calendarFullWidth') === '1') {
+        var el = document.getElementById('main-container');
+        if (el) {
+            el.classList.remove('max-w-7xl');
+            document.getElementById('fw-expand').classList.add('hidden');
+            document.getElementById('fw-collapse').classList.remove('hidden');
+        }
+    }
+})();
+</script>
 
 <div id="calendar-grid">
     {% include "partials/_calendar_grid.html" %}
@@ -69,7 +73,6 @@
     <div class="text-sm text-gray-500 dark:text-gray-400">
         {% if total_vacations > 0 %}
         Total approved vacation days: <strong>{{ total_vacations }}</strong>
-        <a href="/vacations/export" class="ml-2 text-green-600 dark:text-green-400 hover:underline">Export to Excel</a>
         {% endif %}
     </div>
     <button onclick="document.getElementById('vacation-modal').classList.remove('hidden')"
@@ -77,6 +80,186 @@
         + {{ 'Add Vacation' if is_admin else 'Request Vacation' }}
     </button>
 </div>
+
+<!-- Holiday Period Summary (all users) -->
+{% if period_summary %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+    <h2 class="text-lg font-semibold mb-4">Holiday Period {{ period_label }}</h2>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Ends {{ period_end_date|fmtdate }} &middot; <strong>{{ period_summary.months_left }} month{{ 's' if period_summary.months_left != 1 else '' }} remaining</strong>
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ vacation_summary.accrued }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Holiday days earned as of <strong>{{ today|fmtdate }}</strong></div>
+        </div>
+        {% if period_summary.pending > 0 %}
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            <div class="text-2xl font-bold text-amber-500">{{ period_summary.pending }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Pending</div>
+        </div>
+        {% endif %}
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            <div class="text-sm text-gray-600 dark:text-gray-300 space-y-1.5">
+                <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">Remaining holiday days in period:</span>
+                    <span class="font-semibold">{{ period_summary.remaining }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">Months remaining in holiday period:</span>
+                    <span class="font-semibold">{{ period_summary.months_left }}</span>
+                </div>
+                <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1.5">
+                    <span class="text-gray-500 dark:text-gray-400">Avg days/month needed:</span>
+                    <span class="font-bold text-orange-600 dark:text-orange-400">{{ period_summary.avg_per_month }}</span>
+                </div>
+            </div>
+            <div class="text-xs text-gray-400 dark:text-gray-500 mt-2">To avoid backloading all your holiday days.</div>
+        </div>
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ period_summary.used }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Days used</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Admin: All Users Overview -->
+{% if is_admin and admin_summaries %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+    <h2 class="text-lg font-semibold mb-4">Team Overview &mdash; {{ period_label }}</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm" id="admin-holiday-table">
+            <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700 cursor-pointer select-none">
+                    <th class="text-left py-2 font-medium" onclick="sortTable(0)">Name <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(1)">Entitlement <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(2)">Used <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(3)">Pending <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(4)">Remaining <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(5)">Avg/month needed <span class="sort-icon text-gray-400">&#8597;</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for uid, display_name, entitlement, used, pending in admin_summaries %}
+                {% set remaining = entitlement - (used|float) %}
+                <tr class="border-b border-gray-100 dark:border-gray-800">
+                    <td class="py-2.5">{{ display_name }}</td>
+                    <td class="py-2.5 text-right">{{ entitlement }}</td>
+                    <td class="py-2.5 text-right">{{ used }}</td>
+                    <td class="py-2.5 text-right">{{ pending if pending > 0 else '' }}</td>
+                    <td class="py-2.5 text-right font-medium {{ 'text-red-600 dark:text-red-400' if remaining > entitlement * 0.6 else 'text-green-600 dark:text-green-400' }}">
+                        {{ remaining }}
+                    </td>
+                    <td class="py-2.5 text-right">
+                        {% if period_summary and period_summary.months_left > 0 %}
+                        {{ (remaining / period_summary.months_left)|round(1) }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+(function() {
+    let sortCol = -1, sortAsc = true;
+    window.sortTable = function(col) {
+        const table = document.getElementById('admin-holiday-table');
+        const tbody = table.tBodies[0];
+        const rows = Array.from(tbody.rows);
+        if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = true; }
+        rows.sort(function(a, b) {
+            let av = a.cells[col].textContent.trim();
+            let bv = b.cells[col].textContent.trim();
+            let an = parseFloat(av), bn = parseFloat(bv);
+            if (!isNaN(an) && !isNaN(bn)) return sortAsc ? an - bn : bn - an;
+            if (av === '' && bv !== '') return 1;
+            if (bv === '' && av !== '') return -1;
+            return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+        rows.forEach(function(r) { tbody.appendChild(r); });
+        table.querySelectorAll('.sort-icon').forEach(function(el, i) {
+            el.textContent = i === col ? (sortAsc ? '\u25B2' : '\u25BC') : '\u2195';
+        });
+    };
+})();
+</script>
+{% endif %}
+
+<!-- Calendar day selection -->
+<script>
+(function() {
+    var startDate = null, endDate = null, dragRow = null, dragUid = null, dragging = false;
+
+    function clearSelection() {
+        document.querySelectorAll('.cal-cell.ring-2').forEach(function(el) {
+            el.classList.remove('ring-2', 'ring-blue-500', 'ring-inset');
+        });
+    }
+
+    function highlightRange(row, from, to) {
+        clearSelection();
+        var a = from < to ? from : to;
+        var b = from < to ? to : from;
+        row.querySelectorAll('.cal-cell').forEach(function(el) {
+            var d = el.dataset.date;
+            if (d >= a && d <= b) {
+                el.classList.add('ring-2', 'ring-blue-500', 'ring-inset');
+            }
+        });
+    }
+
+    function openModalWithDates(from, to, uid) {
+        var a = from < to ? from : to;
+        var b = from < to ? to : from;
+        var startInput = document.querySelector('#vacation-modal input[name="vacation_date"]');
+        var endInput = document.querySelector('#vacation-modal input[name="end_date"]');
+        var userSelect = document.querySelector('#vacation-modal select[name="user_id"]');
+        if (startInput) startInput.value = a;
+        if (endInput) endInput.value = b;
+        if (userSelect && uid) userSelect.value = uid;
+        document.getElementById('vacation-modal').classList.remove('hidden');
+    }
+
+    document.addEventListener('mousedown', function(e) {
+        var cell = e.target.closest('.cal-cell');
+        if (!cell) return;
+        var row = cell.closest('.cal-row');
+        if (!row) return;
+        e.preventDefault();
+        dragging = true;
+        dragRow = row;
+        dragUid = row.dataset.uid;
+        startDate = cell.dataset.date;
+        endDate = startDate;
+        highlightRange(dragRow, startDate, endDate);
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!dragging) return;
+        var cell = e.target.closest('.cal-cell');
+        if (cell && cell.closest('.cal-row') === dragRow && cell.dataset.date) {
+            endDate = cell.dataset.date;
+            highlightRange(dragRow, startDate, endDate);
+        }
+    });
+
+    document.addEventListener('mouseup', function() {
+        if (!dragging) return;
+        dragging = false;
+        if (startDate) {
+            openModalWithDates(startDate, endDate, dragUid);
+        }
+        setTimeout(clearSelection, 200);
+        dragRow = null;
+    });
+})();
+</script>
 
 <!-- Add Vacation Modal -->
 <div id="vacation-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50"

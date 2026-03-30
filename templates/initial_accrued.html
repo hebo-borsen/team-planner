@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block nav %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center -mt-6">
+    <div class="w-full max-w-lg">
+        <h1 class="text-2xl font-bold text-center mb-2">Welcome!</h1>
+        <p class="text-center text-gray-500 dark:text-gray-400 mb-6">
+            Let's set up your holiday balance for {{ period_label or 'the current period' }}
+        </p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="mb-4 space-y-2">
+            {% for category, message in messages %}
+            <div class="px-4 py-3 rounded-lg text-sm
+                {{ 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' if category == 'success' else '' }}
+                {{ 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200' if category == 'error' else '' }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+            <form method="post" class="space-y-5" id="setup-form">
+
+                <!-- Step 1: Started this period? -->
+                <div>
+                    <label class="block text-sm font-medium mb-3">
+                        Did you start at Børsen during this holiday period?
+                    </label>
+                    <div class="flex gap-3">
+                        <button type="button" id="btn-no" onclick="setStartedThisPeriod(false)"
+                                class="flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors
+                                       border-blue-600 bg-blue-600 text-white">
+                            No, I started before
+                        </button>
+                        <button type="button" id="btn-yes" onclick="setStartedThisPeriod(true)"
+                                class="flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors
+                                       border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400">
+                            Yes, I started this period
+                        </button>
+                    </div>
+                    <input type="hidden" name="started_this_period" id="started_this_period" value="no">
+                </div>
+
+                <!-- Step 1b: Start date (conditional) -->
+                <div id="start-date-section" class="hidden">
+                    <label class="block text-sm font-medium mb-2">When did you start?</label>
+                    <input type="date" name="start_date" id="start_date"
+                           {% if period_start %}min="{{ period_start.isoformat() }}"{% endif %}
+                           {% if period_end %}max="{{ period_end.isoformat() }}"{% endif %}
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg">
+                </div>
+
+                <!-- Step 2: Days used -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">
+                        How many holiday days have you already taken this period?
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        Count the working days you've been off since the holiday period started.
+                        You can adjust the number so the remaining days match what it says on your payslip.
+                    </p>
+                    <input type="number" name="days_used" id="days_used" required min="0" max="365" step="1"
+                           value="0" autofocus
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg">
+                </div>
+
+                <!-- Live preview -->
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-700/50">
+                    <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3">Preview</h3>
+                    <div class="grid grid-cols-2 gap-3 text-center">
+                        <div>
+                            <div class="text-xl font-bold text-blue-600 dark:text-blue-400" id="preview-used">0</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Days used</div>
+                        </div>
+                        <div>
+                            <div class="text-xl font-bold text-green-600 dark:text-green-400" id="preview-remaining">{{ days_off }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Remaining</div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-3 text-center">
+                        Adjust until <strong>Remaining</strong> matches your payslip.
+                        Your entitlement is <strong id="preview-entitlement">{{ days_off }}</strong> days.
+                    </p>
+                </div>
+
+                <button type="submit"
+                        class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg">
+                    Save &amp; Continue
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var baseDaysOff = {{ days_off }};
+    var periodStartStr = '{{ period_start.isoformat() if period_start else '' }}';
+    var periodEndStr = '{{ period_end.isoformat() if period_end else '' }}';
+    var usedEl = document.getElementById('days_used');
+    var startDateEl = document.getElementById('start_date');
+    var previewUsed = document.getElementById('preview-used');
+    var previewRemaining = document.getElementById('preview-remaining');
+    var previewEntitlement = document.getElementById('preview-entitlement');
+    var startedThisPeriod = false;
+
+    function monthsBetween(from, to) {
+        return (to.getFullYear() - from.getFullYear()) * 12 + to.getMonth() - from.getMonth();
+    }
+
+    function getEntitlement() {
+        if (!startedThisPeriod || !startDateEl.value || !periodEndStr) return baseDaysOff;
+        var start = new Date(startDateEl.value);
+        var end = new Date(periodEndStr);
+        var months = monthsBetween(start, end) + 1;
+        if (months < 1) months = 1;
+        return Math.round(baseDaysOff / 12 * months * 10) / 10;
+    }
+
+    function update() {
+        var entitlement = getEntitlement();
+        var used = parseInt(usedEl.value) || 0;
+        var remaining = entitlement - used;
+        previewUsed.textContent = used;
+        previewEntitlement.textContent = entitlement;
+        previewRemaining.textContent = Math.round(remaining * 10) / 10;
+        previewRemaining.classList.toggle('text-red-600', remaining < 0);
+        previewRemaining.classList.toggle('dark:text-red-400', remaining < 0);
+        previewRemaining.classList.toggle('text-green-600', remaining >= 0);
+        previewRemaining.classList.toggle('dark:text-green-400', remaining >= 0);
+    }
+
+    window.setStartedThisPeriod = function(yes) {
+        startedThisPeriod = yes;
+        document.getElementById('started_this_period').value = yes ? 'yes' : 'no';
+        document.getElementById('start-date-section').classList.toggle('hidden', !yes);
+        var btnYes = document.getElementById('btn-yes');
+        var btnNo = document.getElementById('btn-no');
+        if (yes) {
+            btnYes.className = 'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors border-blue-600 bg-blue-600 text-white';
+            btnNo.className = 'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400';
+        } else {
+            btnNo.className = 'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors border-blue-600 bg-blue-600 text-white';
+            btnYes.className = 'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400';
+        }
+        if (!yes) startDateEl.value = '';
+        update();
+    };
+
+    usedEl.addEventListener('input', update);
+    startDateEl.addEventListener('change', update);
+    update();
+})();
+</script>
+{% endblock %}

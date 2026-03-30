@@ -43,23 +43,5 @@ services:
       - ./migrations:/app/migrations
       - ./templates:/app/templates
 
-  cron:
-    build: .
-    container_name: vacation_cron
-    environment:
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_NAME: vacation_db
-      DB_USER: vacation_user
-      DB_PASSWORD: vacation_pass
-    depends_on:
-      mysql:
-        condition: service_healthy
-    volumes:
-      - ./cron_recalculate.py:/app/cron_recalculate.py
-      - ./db.py:/app/db.py
-      - ./crontab:/app/crontab
-    entrypoint: ["sh", "-c", "crontab /app/crontab && cron -f"]
-
 volumes:
   mysql_data:

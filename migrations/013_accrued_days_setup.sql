@@ -1,0 +1,2 @@
+ALTER TABLE users MODIFY COLUMN days_off_per_year INT DEFAULT 34;
+ALTER TABLE users ADD COLUMN accrued_days_initial BOOLEAN DEFAULT FALSE;

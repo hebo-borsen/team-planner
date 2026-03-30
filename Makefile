@@ -1,4 +1,4 @@
-.PHONY: help up down restart build logs logs-app logs-db shell-app shell-db clean nuclear-restart ps migrate test cron-run cron-logs
+.PHONY: help up down restart reload build logs logs-app logs-db shell-app shell-db clean nuclear-restart ps migrate test
 
 #-- Meta
 
@@ -8,6 +8,9 @@ help: ## Show this help message
 	| sed -e 's/\[32m #-- /[33m/'
 
 #-- Local development
+
+reload: ## Reload Flask (touch app.py inside container)
+	docker exec vacation_app touch /app/app.py
 
 up: ## Start all services
 	docker compose up -d
@@ -59,14 +62,6 @@ shell-db: ## Open a MySQL prompt
 
 test: ## Run tests inside the app container
 	docker exec vacation_app python -m pytest tests/ -v
-
-#-- Cron
-
-cron-run: ## Run the vacation recalculation manually
-	docker exec vacation_app python cron_recalculate.py
-
-cron-logs: ## Follow cron container logs
-	docker compose logs -f cron
 
 #-- Cleanup
 

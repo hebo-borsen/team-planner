@@ -167,20 +167,34 @@ def update_days_off(user_id, days_off):
     conn.close()
 
 
-def get_vacation_summary(user_id, year):
+def _prorate_entitlement(days_off_per_year, start_date, period_start, period_end):
+    """If start_date is within the period, prorate. Otherwise full entitlement."""
+    base = float(days_off_per_year)
+    if start_date and period_start <= start_date <= period_end:
+        months_in_period = (period_end.year - start_date.year) * 12 + period_end.month - start_date.month + 1
+        if months_in_period < 1:
+            months_in_period = 1
+        return round(base / 12 * months_in_period, 1)
+    return base
+
+
+def get_vacation_summary(user_id, period_start, period_end):
+    from datetime import date as _date
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT days_off_per_year FROM users WHERE id = %s", (user_id,))
+    cursor.execute("SELECT days_off_per_year, start_date FROM users WHERE id = %s", (user_id,))
     row = cursor.fetchone()
-    days_off_per_year = row[0] if row and row[0] is not None else 25
+    base_days = row[0] if row and row[0] is not None else 34
+    user_start = row[1] if row else None
+    entitlement = _prorate_entitlement(base_days, user_start, period_start, period_end)
 
     cursor.execute("""
         SELECT COUNT(*) FROM vacation_days vd
         JOIN team_members tm ON vd.member_id = tm.id
         JOIN users u ON u.username = tm.name
         WHERE u.id = %s AND vd.status = 'approved'
-          AND YEAR(vd.vacation_date) = %s
-    """, (user_id, year))
+          AND vd.vacation_date BETWEEN %s AND %s
+    """, (user_id, period_start, period_end))
     used = cursor.fetchone()[0]
 
     cursor.execute("""
@@ -188,24 +202,93 @@ def get_vacation_summary(user_id, year):
         JOIN team_members tm ON vd.member_id = tm.id
         JOIN users u ON u.username = tm.name
         WHERE u.id = %s AND vd.status = 'pending'
-          AND YEAR(vd.vacation_date) = %s
-    """, (user_id, year))
+          AND vd.vacation_date BETWEEN %s AND %s
+    """, (user_id, period_start, period_end))
     pending = cursor.fetchone()[0]
 
-    cursor.execute("SELECT accrued_days FROM users WHERE id = %s", (user_id,))
-    accrued_row = cursor.fetchone()
-    accrued = float(accrued_row[0]) if accrued_row and accrued_row[0] is not None else 0.0
+    cursor.close()
+    conn.close()
+
+    # Calculate accrued dynamically: (entitlement / 12) * months elapsed
+    today = _date.today()
+    accrual_start = max(period_start, user_start) if user_start and user_start > period_start else period_start
+    months_elapsed = (today.year - accrual_start.year) * 12 + today.month - accrual_start.month
+    if months_elapsed < 0:
+        months_elapsed = 0
+    accrued = round(entitlement / 12 * months_elapsed, 1)
+
+    return {
+        'days_off_per_year': entitlement,
+        'used': used,
+        'pending': pending,
+        'remaining': entitlement - used,
+        'accrued': accrued,
+    }
+
+
+def get_period_vacation_summary(user_id, period_start, period_end):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT days_off_per_year, start_date FROM users WHERE id = %s", (user_id,))
+    row = cursor.fetchone()
+    base_days = row[0] if row and row[0] is not None else 34
+    user_start = row[1] if row else None
+    entitlement = _prorate_entitlement(base_days, user_start, period_start, period_end)
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM vacation_days vd
+        JOIN team_members tm ON vd.member_id = tm.id
+        JOIN users u ON u.username = tm.name
+        WHERE u.id = %s AND vd.status = 'approved'
+          AND vd.vacation_date BETWEEN %s AND %s
+    """, (user_id, period_start, period_end))
+    used = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM vacation_days vd
+        JOIN team_members tm ON vd.member_id = tm.id
+        JOIN users u ON u.username = tm.name
+        WHERE u.id = %s AND vd.status = 'pending'
+          AND vd.vacation_date BETWEEN %s AND %s
+    """, (user_id, period_start, period_end))
+    pending = cursor.fetchone()[0]
 
     cursor.close()
     conn.close()
 
     return {
-        'days_off_per_year': days_off_per_year,
+        'days_off_per_year': entitlement,
         'used': used,
         'pending': pending,
-        'remaining': days_off_per_year - used,
-        'accrued': accrued,
+        'remaining': entitlement - used,
     }
+
+
+def get_all_users_period_summary(period_start, period_end):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
+               u.days_off_per_year, u.start_date,
+               COALESCE(SUM(CASE WHEN vd.status = 'approved' THEN 1 ELSE 0 END), 0) AS used,
+               COALESCE(SUM(CASE WHEN vd.status = 'pending' THEN 1 ELSE 0 END), 0) AS pending
+        FROM users u
+        LEFT JOIN team_members tm ON tm.name = u.username
+        LEFT JOIN vacation_days vd ON tm.id = vd.member_id
+            AND vd.vacation_date BETWEEN %s AND %s
+        GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date
+        ORDER BY COALESCE(u.display_name, u.username)
+    """, (period_start, period_end))
+    raw = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    # Prorate entitlement per user
+    results = []
+    for uid, display_name, base_days, user_start, used, pending in raw:
+        base = base_days if base_days is not None else 34
+        entitlement = _prorate_entitlement(base, user_start, period_start, period_end)
+        results.append((uid, display_name, entitlement, int(used), int(pending)))
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -234,10 +317,70 @@ def get_all_users_basic():
     return users
 
 
-def update_accrued_days(user_id, accrued_days):
+def needs_initial_accrued(user_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET accrued_days = %s WHERE id = %s", (accrued_days, user_id))
+    cursor.execute("SELECT accrued_days_initial FROM users WHERE id = %s", (user_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return row and not row[0]
+
+
+def set_initial_accrued(user_id, days_used, period_start, start_date=None):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET accrued_days_initial = TRUE, start_date = %s WHERE id = %s",
+        (start_date, user_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    if days_used > 0 and period_start:
+        backfill_vacation_days(user_id, int(days_used), period_start)
+
+
+def backfill_vacation_days(user_id, count, period_start):
+    """Insert `count` approved vacation days starting from period_start, skipping weekends/holidays."""
+    from datetime import timedelta as td
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        conn.close()
+        return
+    username = row[0]
+    cursor.execute("SELECT id FROM team_members WHERE name = %s", (username,))
+    row = cursor.fetchone()
+    if row:
+        member_id = row[0]
+    else:
+        cursor.execute("INSERT INTO team_members (name, emoji) VALUES (%s, %s)", (username, '👤'))
+        conn.commit()
+        member_id = cursor.lastrowid
+    # Fetch all enabled holidays in a generous range
+    far_end = period_start + td(days=365)
+    cursor.execute(
+        "SELECT holiday_date FROM period_holidays WHERE enabled = TRUE AND holiday_date BETWEEN %s AND %s",
+        (period_start, far_end))
+    holidays = {r[0] for r in cursor.fetchall()}
+    added = 0
+    current = period_start
+    while added < count:
+        if current.weekday() not in (5, 6) and current not in holidays:
+            try:
+                cursor.execute(
+                    """INSERT INTO vacation_days
+                       (member_id, vacation_date, status, requested_by, approved_by, approved_at)
+                       VALUES (%s, %s, 'approved', %s, %s, %s)""",
+                    (member_id, current, user_id, user_id, datetime.now()))
+                added += 1
+            except mysql.connector.IntegrityError:
+                pass  # already exists, still counts
+                added += 1
+        current += td(days=1)
     conn.commit()
     cursor.close()
     conn.close()
@@ -466,6 +609,75 @@ def get_pending_requests():
     cursor.close()
     conn.close()
     return rows
+
+
+def get_pending_requests_grouped():
+    """Group pending requests by user+status+created_at (same form submission)."""
+    rows = get_pending_requests()
+    groups = []
+    current = None
+    for vid, display, vdate, status, req_by, created_at in rows:
+        if (current and current['display'] == display
+                and current['status'] == status
+                and current['created_at'] == created_at):
+            current['ids'].append(vid)
+            current['dates'].append(vdate)
+            current['end_date'] = vdate
+            current['count'] += 1
+        else:
+            if current:
+                groups.append(current)
+            current = {
+                'ids': [vid],
+                'dates': [vdate],
+                'display': display,
+                'start_date': vdate,
+                'end_date': vdate,
+                'status': status,
+                'req_by': req_by,
+                'created_at': created_at,
+                'count': 1,
+            }
+    if current:
+        groups.append(current)
+    return groups
+
+
+def approve_vacation_bulk(vacation_day_ids, approved_by_username):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now()
+    for vid in vacation_day_ids:
+        cursor.execute("SELECT status FROM vacation_days WHERE id = %s", (vid,))
+        row = cursor.fetchone()
+        if not row:
+            continue
+        if row[0] == 'pending':
+            cursor.execute(
+                "UPDATE vacation_days SET status = 'approved', approved_by = %s, approved_at = %s WHERE id = %s",
+                (approved_by_username, now, vid))
+        elif row[0] == 'pending_removal':
+            cursor.execute("DELETE FROM vacation_days WHERE id = %s", (vid,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def reject_vacation_bulk(vacation_day_ids):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    for vid in vacation_day_ids:
+        cursor.execute("SELECT status FROM vacation_days WHERE id = %s", (vid,))
+        row = cursor.fetchone()
+        if not row:
+            continue
+        if row[0] == 'pending':
+            cursor.execute("DELETE FROM vacation_days WHERE id = %s", (vid,))
+        elif row[0] == 'pending_removal':
+            cursor.execute("UPDATE vacation_days SET status = 'approved' WHERE id = %s", (vid,))
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 def get_pending_count():
@@ -752,6 +964,16 @@ def get_vacations_for_date_range(start_date, end_date):
     return vacations
 
 
+def get_all_enabled_holidays():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT holiday_date FROM period_holidays WHERE enabled = TRUE")
+    holidays = {row[0] for row in cursor.fetchall()}
+    cursor.close()
+    conn.close()
+    return holidays
+
+
 def get_holidays_for_date_range(start_date, end_date):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -834,6 +1056,31 @@ def update_period_holiday_date(holiday_id, new_date):
         conn.commit()
     else:
         period_id = None
+    cursor.close()
+    conn.close()
+    return period_id
+
+
+def add_period_holiday(period_id, name, holiday_date):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO period_holidays (period_id, name, holiday_date, enabled) VALUES (%s, %s, %s, TRUE)",
+        (period_id, name, holiday_date))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def delete_period_holiday(holiday_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT period_id FROM period_holidays WHERE id = %s", (holiday_id,))
+    row = cursor.fetchone()
+    period_id = row[0] if row else None
+    if period_id:
+        cursor.execute("DELETE FROM period_holidays WHERE id = %s", (holiday_id,))
+        conn.commit()
     cursor.close()
     conn.close()
     return period_id

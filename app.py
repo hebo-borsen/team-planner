@@ -87,12 +87,15 @@ def login_required(f):
                     session['role'] = user[4] or 'user'
                     session['initials'] = user[5] or user[1]
                     session['font'] = user[6] or ''
+                    session['needs_initial_accrued'] = db.needs_initial_accrued(user[0])
                 else:
                     return redirect(url_for('login'))
             else:
                 return redirect(url_for('login'))
         if session.get('must_change_password'):
             return redirect(url_for('force_password'))
+        if session.get('needs_initial_accrued'):
+            return redirect(url_for('initial_accrued'))
         return f(*args, **kwargs)
     return decorated
 
@@ -144,6 +147,7 @@ def login():
             session['role'] = user[4] or 'user'
             session['initials'] = user[5] or user[1]
             session['font'] = user[6] or ''
+            session['needs_initial_accrued'] = db.needs_initial_accrued(user[0])
             token = db.create_session_token(user[0])
             resp = redirect(url_for('calendar_view'))
             resp.set_cookie('session_token', token, max_age=2592000, httponly=True, samesite='Lax')
@@ -213,6 +217,51 @@ def force_password():
     return render_template('force_password.html')
 
 
+@app.route('/initial-accrued', methods=['GET', 'POST'])
+def initial_accrued():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    # Look up current period
+    period_id = db.get_current_period_id()
+    period_start = None
+    period_end = None
+    period_label = None
+    days_off = 34
+    if period_id:
+        for pid, plabel, pstart, pend in db.get_holiday_periods():
+            if pid == period_id:
+                period_start = pstart
+                period_end = pend
+                period_label = plabel
+                days_off = db.get_vacation_summary(
+                    session['user_id'], pstart, pend)['days_off_per_year']
+                break
+
+    if request.method == 'POST':
+        raw_used = request.form.get('days_used', '').strip()
+        started_this_period = request.form.get('started_this_period') == 'yes'
+        start_date_str = request.form.get('start_date', '').strip()
+        try:
+            days_used = int(raw_used) if raw_used else 0
+            if days_used < 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            flash('Please enter a valid number (0 or more).', 'error')
+            return redirect(url_for('initial_accrued'))
+        user_start = None
+        if started_this_period and start_date_str:
+            user_start = date.fromisoformat(start_date_str)
+        db.set_initial_accrued(session['user_id'], days_used, period_start,
+                               start_date=user_start)
+        session['needs_initial_accrued'] = False
+        flash('Holiday balance saved!', 'success')
+        return redirect(url_for('calendar_view'))
+    return render_template('initial_accrued.html',
+                           period_label=period_label, days_off=days_off,
+                           period_start=period_start, period_end=period_end)
+
+
 # ---------------------------------------------------------------------------
 # Calendar (home)
 # ---------------------------------------------------------------------------
@@ -260,9 +309,42 @@ def calendar_view():
             weekend_days.add(d)
 
     total_vacations = db.get_vacation_count()
-    vacation_summary = db.get_vacation_summary(session['user_id'], today.year)
+
+    # Holiday period summary
+    period_id = db.get_current_period_id()
+    period_summary = None
+    period_label = None
+    period_start = None
+    period_end_date = None
+    admin_summaries = []
+    if period_id:
+        periods = db.get_holiday_periods()
+        for pid, plabel, pstart, pend in periods:
+            if pid == period_id:
+                period_label = plabel
+                period_start = pstart
+                period_end_date = pend
+                period_summary = db.get_period_vacation_summary(
+                    session['user_id'], pstart, pend)
+                months_left = (pend.year - today.year) * 12 + pend.month - today.month
+                if months_left < 1:
+                    months_left = 1
+                period_summary['avg_per_month'] = round(
+                    period_summary['remaining'] / months_left, 1)
+                period_summary['months_left'] = months_left
+                if session.get('role') == 'admin':
+                    admin_summaries = db.get_all_users_period_summary(pstart, pend)
+                break
+
+    if period_start and period_end_date:
+        vacation_summary = db.get_vacation_summary(
+            session['user_id'], period_start, period_end_date)
+    else:
+        vacation_summary = {'days_off_per_year': 34, 'used': 0, 'pending': 0,
+                            'remaining': 34, 'accrued': 0}
 
     template_data = {
+        'today': today,
         'start_date': start_date,
         'end_date': end_date,
         'days': days,
@@ -275,11 +357,22 @@ def calendar_view():
         'total_vacations': total_vacations,
         'vacation_summary': vacation_summary,
         'current_year': today.year,
+        'period_summary': period_summary,
+        'period_label': period_label,
+        'period_end_date': period_end_date,
+        'admin_summaries': admin_summaries,
         'presets': [
             {'label': '7 days',  'from': today.isoformat(), 'to': (today + timedelta(days=6)).isoformat(),  'active': start_date == today and (end_date - start_date).days == 6},
             {'label': '14 days', 'from': today.isoformat(), 'to': (today + timedelta(days=13)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 13},
             {'label': '30 days', 'from': today.isoformat(), 'to': (today + timedelta(days=29)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 29},
-        ],
+            {'label': '60 days', 'from': today.isoformat(), 'to': (today + timedelta(days=59)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 59},
+            {'label': '90 days', 'from': today.isoformat(), 'to': (today + timedelta(days=89)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 89},
+        ] + ([{
+            'label': 'Entire year',
+            'from': period_start.isoformat(),
+            'to': period_end_date.isoformat(),
+            'active': period_start == start_date and period_end_date == end_date,
+        }] if period_start and period_end_date else []),
         'active_tab': 'calendar_view',
     }
 
@@ -354,30 +447,53 @@ def export_vacations():
 @app.route('/approvals')
 @admin_required
 def approvals():
-    pending = db.get_pending_requests()
-    return render_template('approvals.html', pending=pending, active_tab='approvals')
+    groups = db.get_pending_requests_grouped()
+    holidays = db.get_all_enabled_holidays()
+    return render_template('approvals.html', groups=groups,
+                           holidays=holidays, active_tab='approvals')
+
+
+def _approval_response():
+    groups = db.get_pending_requests_grouped()
+    holidays = db.get_all_enabled_holidays()
+    if is_htmx():
+        return render_template('partials/_approval_list.html',
+                               groups=groups, holidays=holidays)
+    return redirect(url_for('approvals'))
 
 
 @app.route('/approvals/<int:vacation_day_id>/approve', methods=['POST'])
 @admin_required
 def approve_vacation(vacation_day_id):
     db.approve_vacation(vacation_day_id, session['username'])
-    pending = db.get_pending_requests()
-    if is_htmx():
-        return render_template('partials/_approval_list.html', pending=pending)
-    flash('Request approved.', 'success')
-    return redirect(url_for('approvals'))
+    if not is_htmx():
+        flash('Request approved.', 'success')
+    return _approval_response()
 
 
 @app.route('/approvals/<int:vacation_day_id>/reject', methods=['POST'])
 @admin_required
 def reject_vacation(vacation_day_id):
     db.reject_vacation(vacation_day_id)
-    pending = db.get_pending_requests()
-    if is_htmx():
-        return render_template('partials/_approval_list.html', pending=pending)
-    flash('Request rejected.', 'success')
-    return redirect(url_for('approvals'))
+    if not is_htmx():
+        flash('Request rejected.', 'success')
+    return _approval_response()
+
+
+@app.route('/approvals/bulk', methods=['POST'])
+@admin_required
+def bulk_approve():
+    ids = request.form.getlist('ids', type=int)
+    action = request.form.get('action')
+    if ids and action == 'approve':
+        db.approve_vacation_bulk(ids, session['username'])
+        if not is_htmx():
+            flash(f'Approved {len(ids)} day(s).', 'success')
+    elif ids and action == 'reject':
+        db.reject_vacation_bulk(ids)
+        if not is_htmx():
+            flash(f'Rejected {len(ids)} day(s).', 'success')
+    return _approval_response()
 
 
 # ---------------------------------------------------------------------------
@@ -648,7 +764,7 @@ def settings():
     holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('settings.html', periods=periods,
                            selected_period_id=period_id, holidays=holidays,
-                           active_tab='settings')
+                           active_tab='settings', today=date.today())
 
 
 @app.route('/settings/holidays')
@@ -657,7 +773,8 @@ def settings_holidays():
     period_id = request.args.get('period_id', type=int)
     holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
-                           holidays=holidays, selected_period_id=period_id)
+                           holidays=holidays, selected_period_id=period_id,
+                           today=date.today())
 
 
 @app.route('/settings/holidays/<int:holiday_id>/toggle', methods=['POST'])
@@ -666,7 +783,8 @@ def toggle_holiday(holiday_id):
     period_id = db.toggle_period_holiday(holiday_id)
     holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
-                           holidays=holidays, selected_period_id=period_id)
+                           holidays=holidays, selected_period_id=period_id,
+                           today=date.today())
 
 
 @app.route('/settings/holidays/<int:holiday_id>/date', methods=['POST'])
@@ -678,7 +796,32 @@ def update_holiday_date(holiday_id):
     period_id = db.update_period_holiday_date(holiday_id, date.fromisoformat(new_date))
     holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
-                           holidays=holidays, selected_period_id=period_id)
+                           holidays=holidays, selected_period_id=period_id,
+                           today=date.today())
+
+
+@app.route('/settings/holidays/add', methods=['POST'])
+@admin_required
+def add_period_holiday():
+    period_id = request.form.get('period_id', type=int)
+    name = request.form.get('name', '').strip()
+    holiday_date = request.form.get('holiday_date')
+    if period_id and name and holiday_date:
+        db.add_period_holiday(period_id, name, date.fromisoformat(holiday_date))
+    holidays = db.get_period_holidays(period_id) if period_id else []
+    return render_template('partials/_period_holidays.html',
+                           holidays=holidays, selected_period_id=period_id,
+                           today=date.today())
+
+
+@app.route('/settings/holidays/<int:holiday_id>/delete', methods=['DELETE'])
+@admin_required
+def delete_period_holiday(holiday_id):
+    period_id = db.delete_period_holiday(holiday_id)
+    holidays = db.get_period_holidays(period_id) if period_id else []
+    return render_template('partials/_period_holidays.html',
+                           holidays=holidays, selected_period_id=period_id,
+                           today=date.today())
 
 
 # ---------------------------------------------------------------------------

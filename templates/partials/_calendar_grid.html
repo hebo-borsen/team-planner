@@ -1,3 +1,4 @@
+<style>.cal-row:hover td { background-color: rgba(59,130,246,0.04); } .dark .cal-row:hover td { background-color: rgba(59,130,246,0.08); }</style>
 <div class="overflow-x-auto">
     <table class="min-w-full text-sm border border-gray-200 dark:border-gray-700">
         <thead>
@@ -37,7 +38,8 @@
         <tbody>
             {% for uid, uname, udisplay_name, uinitials, ufont in users %}
             {% set display = udisplay_name or uname %}
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+            {% set selectable = is_admin or uid == user_id %}
+            <tr class="{{ 'cal-row' if selectable else '' }} hover:bg-gray-50 dark:hover:bg-gray-800/50" data-uid="{{ uid }}">
                 <td class="px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-900 z-10 whitespace-nowrap"
                     {% if ufont %}style="font-family: '{{ ufont }}', cursive;"{% endif %}>
                     {{ display }}
@@ -46,12 +48,14 @@
                 {% set user_pending = pending_dict.get(display, []) %}
                 {% set user_removal = removal_dict.get(display, []) %}
                 {% for day in days %}
-                <td class="px-1 py-1.5 text-center border border-gray-200 dark:border-gray-700
+                <td class="{{ 'cal-cell' if selectable else '' }} px-1 py-1.5 text-center border border-gray-200 dark:border-gray-700
+                    {{ 'cursor-pointer' if selectable else '' }}
                     {{ 'bg-gray-200 dark:bg-gray-700' if day in weekend_days else '' }}
                     {{ 'bg-green-100 dark:bg-green-900/30' if day in holiday_dict and day not in weekend_days and day not in user_vacs and day not in user_pending and day not in user_removal else '' }}
                     {{ 'bg-blue-500 text-white font-bold' if day in user_vacs and day not in user_removal else '' }}
                     {{ 'bg-amber-300 dark:bg-amber-600 text-amber-900 dark:text-amber-100 font-bold' if day in user_pending else '' }}
                     {{ 'bg-blue-500 text-white font-bold ring-2 ring-red-500 ring-inset' if day in user_removal else '' }}"
+                    data-date="{{ day.isoformat() }}"
                     {% if day in user_pending %}title="Pending approval"{% endif %}
                     {% if day in user_removal %}title="Removal requested"{% endif %}>
                     {{ 'V' if day in user_vacs and day not in user_removal else '' }}{{ '?' if day in user_pending else '' }}{{ 'V' if day in user_removal else '' }}
