@@ -116,19 +116,23 @@ function toggleFullWidth() {
     </p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ vacation_summary.accrued }}</div>
-            <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">Holiday days earned as of <strong>{{ today|fmtdate }}</strong></div>
+            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ (vacation_summary.accrued - vacation_summary.used)|round(1) }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">Holiday days available as of <strong>{{ today|fmtdate }}</strong></div>
             <div class="text-xs text-gray-400 dark:text-gray-500 space-y-0.5 border-t border-gray-200 dark:border-gray-600 pt-2">
-                <div class="flex justify-between"><span>Yearly entitlement:</span> <span>{{ vacation_summary.days_off_per_year }}</span></div>
+                <div class="flex justify-between"><span>Earned:</span> <span>{{ vacation_summary.accrued }}</span></div>
+                <div class="flex justify-between"><span>Used:</span> <span>{{ vacation_summary.used }}</span></div>
+                <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
+                    <span>Available:</span>
+                    <span>{{ vacation_summary.accrued }} &minus; {{ vacation_summary.used }} = <strong>{{ (vacation_summary.accrued - vacation_summary.used)|round(1) }}</strong></span>
+                </div>
+                <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
+                    <span>Earned calculation:</span>
+                    <span>{{ vacation_summary.base_days }} / 12 &times; {{ vacation_summary.months_elapsed }} = {{ vacation_summary.accrued }}</span>
+                </div>
+                <div class="flex justify-between"><span>Accrual start:</span> <span>{{ vacation_summary.accrual_start|fmtdate }}</span></div>
                 {% if vacation_summary.base_days != vacation_summary.days_off_per_year %}
                 <div class="flex justify-between"><span>Base days (before proration):</span> <span>{{ vacation_summary.base_days }}</span></div>
                 {% endif %}
-                <div class="flex justify-between"><span>Accrual start:</span> <span>{{ vacation_summary.accrual_start|fmtdate }}</span></div>
-                <div class="flex justify-between"><span>Months elapsed:</span> <span>{{ vacation_summary.months_elapsed }}</span></div>
-                <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
-                    <span>Calculation:</span>
-                    <span>{{ vacation_summary.base_days }} / 12 &times; {{ vacation_summary.months_elapsed }} = <strong>{{ vacation_summary.accrued }}</strong></span>
-                </div>
             </div>
         </div>
         {% if period_summary.pending > 0 %}
@@ -149,7 +153,7 @@ function toggleFullWidth() {
                 </div>
                 <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1.5">
                     <span class="text-gray-500 dark:text-gray-400">Avg days/month needed:</span>
-                    <span class="font-bold text-orange-600 dark:text-orange-400">{{ period_summary.avg_per_month }}</span>
+                    <span class="font-bold {{ 'text-red-600 dark:text-red-400' if period_summary.avg_per_month > 5.5 else '' }}">{{ period_summary.avg_per_month }}</span>
                 </div>
             </div>
             <div class="text-xs text-gray-400 dark:text-gray-500 mt-2">To avoid backloading all your holiday days.</div>

@@ -21,7 +21,6 @@ Team vacation planning application built with Flask + HTMX + Tailwind CSS, runni
 app.py                          # Flask app — all routes, auth decorators
 db.py                           # All database functions (auth, vacations, holidays, events, operation log)
 migrate.py                      # Database migration runner
-cron_recalculate.py             # Nightly cron: recalculates accrued days, logs to operation_log
 migrations/                     # Numbered SQL migration files
 templates/
   base.html                     # Base layout: nav, Tailwind CDN, HTMX CDN, dark mode, flash messages

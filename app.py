@@ -815,6 +815,26 @@ def set_user_role(user_id):
     return redirect(url_for('user_management'))
 
 
+@app.route('/users/<int:user_id>/toggle-active', methods=['POST'])
+@admin_required
+def toggle_user_active(user_id):
+    db.toggle_user_active(user_id)
+    flash('User visibility updated.', 'success')
+    return redirect(url_for('user_management'))
+
+
+@app.route('/users/<int:user_id>/display-name', methods=['POST'])
+@admin_required
+def set_display_name(user_id):
+    display_name = request.form.get('display_name', '').strip()
+    if not display_name:
+        flash('Name cannot be empty.', 'error')
+        return redirect(url_for('user_management'))
+    db.update_display_name(user_id, display_name)
+    flash('Name updated.', 'success')
+    return redirect(url_for('user_management'))
+
+
 @app.route('/users/<int:user_id>/days-off', methods=['POST'])
 @admin_required
 def set_days_off(user_id):

@@ -1,4 +1,12 @@
-<style>.cal-row:hover td { background-color: rgba(59,130,246,0.04); } .dark .cal-row:hover td { background-color: rgba(59,130,246,0.08); }</style>
+<style>
+tr.cal-hover:hover { outline: 2px solid rgba(59,130,246,0.5); outline-offset: -2px; }
+tr.cal-hover:hover td { position: relative; }
+tr.cal-hover td:hover::after {
+    content: ''; position: absolute; inset: 0;
+    background-color: rgba(0,0,0,0.12); pointer-events: none; border-radius: 2px;
+}
+.dark tr.cal-hover td:hover::after { background-color: rgba(255,255,255,0.10); }
+</style>
 <div class="overflow-x-auto">
     <table class="min-w-full text-sm border border-gray-200 dark:border-gray-700">
         <thead>
@@ -39,7 +47,7 @@
             {% for uid, uname, udisplay_name, uinitials, ufont in users %}
             {% set display = udisplay_name or uname %}
             {% set selectable = is_admin or uid == user_id %}
-            <tr class="{{ 'cal-row' if selectable else '' }} hover:bg-gray-50 dark:hover:bg-gray-800/50" data-uid="{{ uid }}">
+            <tr class="{{ 'cal-row cal-hover' if selectable else '' }}" data-uid="{{ uid }}">
                 <td class="px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-900 z-10 whitespace-nowrap"
                     {% if ufont %}style="font-family: '{{ ufont }}', cursive;"{% endif %}>
                     {{ display }}
@@ -65,5 +73,33 @@
             </tr>
             {% endfor %}
         </tbody>
+        <tfoot>
+            {% set month_colors = ['bg-blue-100 dark:bg-blue-900/30', 'bg-purple-100 dark:bg-purple-900/30', 'bg-teal-100 dark:bg-teal-900/30', 'bg-orange-100 dark:bg-orange-900/30', 'bg-pink-100 dark:bg-pink-900/30', 'bg-cyan-100 dark:bg-cyan-900/30', 'bg-amber-100 dark:bg-amber-900/30', 'bg-indigo-100 dark:bg-indigo-900/30', 'bg-lime-100 dark:bg-lime-900/30', 'bg-rose-100 dark:bg-rose-900/30', 'bg-emerald-100 dark:bg-emerald-900/30', 'bg-violet-100 dark:bg-violet-900/30'] %}
+            {% set ns = namespace(spans=[], cur_label='', cur_count=0, cur_color_idx=0) %}
+            {% for day in days %}
+                {% set label = day.strftime('%Y - %B') %}
+                {% if label != ns.cur_label %}
+                    {% if ns.cur_label %}
+                        {% set _ = ns.spans.append({'label': ns.cur_label, 'count': ns.cur_count, 'color': month_colors[ns.cur_color_idx % 12]}) %}
+                        {% set ns.cur_color_idx = ns.cur_color_idx + 1 %}
+                    {% endif %}
+                    {% set ns.cur_label = label %}
+                    {% set ns.cur_count = 1 %}
+                {% else %}
+                    {% set ns.cur_count = ns.cur_count + 1 %}
+                {% endif %}
+            {% endfor %}
+            {% if ns.cur_label %}
+                {% set _ = ns.spans.append({'label': ns.cur_label, 'count': ns.cur_count, 'color': month_colors[ns.cur_color_idx % 12]}) %}
+            {% endif %}
+            <tr>
+                <td class="px-3 py-1.5 border border-gray-200 dark:border-gray-700 sticky left-0 bg-gray-100 dark:bg-gray-800 z-10"></td>
+                {% for span in ns.spans %}
+                <td colspan="{{ span.count }}" class="px-1 py-1 text-left text-[10px] font-medium border border-gray-200 dark:border-gray-700 {{ span.color }}">
+                    {{ span.label }}
+                </td>
+                {% endfor %}
+            </tr>
+        </tfoot>
     </table>
 </div>

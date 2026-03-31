@@ -39,7 +39,6 @@ services:
       - ./app.py:/app/app.py
       - ./db.py:/app/db.py
       - ./migrate.py:/app/migrate.py
-      - ./cron_recalculate.py:/app/cron_recalculate.py
       - ./migrations:/app/migrations
       - ./templates:/app/templates
 

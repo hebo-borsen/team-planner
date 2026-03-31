@@ -4,9 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Team Vacation Planner{% endblock %}</title>
+    <link id="favicon" rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦜</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { darkMode: 'class' }
+        // Apply dark mode immediately from localStorage to avoid flash
+        if (localStorage.getItem('dvdDark') === '1') {
+            document.documentElement.classList.add('dark');
+        }
     </script>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,10 +49,10 @@
 
                 <div class="flex items-center space-x-2">
                     {% if username %}
-                    <button hx-post="/theme/toggle" hx-swap="none"
-                            class="px-2 py-1 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                            title="Toggle theme">
-                        {{ '☾' if theme == 'dark' else '☀' }}
+                    <button id="theme-toggle" title="Toggle theme"
+                            class="inline-flex items-center gap-0.5 px-1.5 py-1 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 select-none cursor-pointer">
+                        <span class="theme-sun px-1 rounded {{ 'bg-amber-200 dark:bg-transparent' }}">☀</span>
+                        <span class="theme-moon px-1 rounded {{ 'bg-transparent dark:bg-indigo-500 dark:text-white' }}">☾</span>
                     </button>
                     {% if is_admin %}
                     <a href="/users"
@@ -122,6 +127,258 @@
             });
         }
     });
+    </script>
+
+    <!-- DVD Mode Easter Egg: triggers when clicking the dark mode toggle -->
+    <script>
+    (function() {
+        var themeBtn = document.getElementById('theme-toggle');
+        if (!themeBtn) return;
+        var sunEl = themeBtn.querySelector('.theme-sun');
+        var moonEl = themeBtn.querySelector('.theme-moon');
+
+        function setToggleVisual(dark) {
+            if (dark) {
+                sunEl.className = 'theme-sun px-1 rounded bg-transparent opacity-50';
+                moonEl.className = 'theme-moon px-1 rounded bg-indigo-500 text-white';
+            } else {
+                sunEl.className = 'theme-sun px-1 rounded bg-amber-200';
+                moonEl.className = 'theme-moon px-1 rounded bg-transparent opacity-50';
+            }
+        }
+
+        var active = false;
+        var titleInterval = null;
+        var origTitle = document.title;
+        var parrotFrames = [];
+        var parrotInterval = null;
+        var parrotStatic = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦜</text></svg>";
+        (function buildParrotFrames() {
+            var canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            var ctx = canvas.getContext('2d');
+            var hues = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
+            var loaded = 0;
+            hues.forEach(function(h) {
+                var svg = new Image();
+                svg.onload = function() {
+                    ctx.clearRect(0, 0, 64, 64);
+                    ctx.filter = 'hue-rotate(' + h + 'deg) saturate(2)';
+                    ctx.drawImage(svg, 0, 0, 64, 64);
+                    ctx.filter = 'none';
+                    parrotFrames.push(canvas.toDataURL('image/png'));
+                    loaded++;
+                };
+                svg.src = "data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦜</text></svg>");
+            });
+        })();
+        var rafId = null;
+        var items = [];
+        var bounceColors = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
+        var quoteBox = null;
+        var quoteInterval = null;
+        var quotes = [
+            "Tror du pirater kalder det 'Daaaaarrrrrrggggggk mode'?",
+            "Fun fact: Dark mode sparer 0.003% batteri. Men denne animation æder det nok op i hukommelsesforbrug.",
+            "Tror du også Batman bruger dark mode?",
+            "Hvis man siger 'dark mode' tre gange foran spejlet, tror du så der dukker en backend udvikler op bag dig?",
+            "Ihhh, dark mode. Mums!",
+            "På finsk hedder dark mode: 'Tumma Tila'. Det lyder lidt som en cocktail man fortryder.",
+            "På tysk hedder dark mode: 'Dunkelmodus'. Selvfølgelig gør det det.",
+            "D - A - R - K \u00a0\u00a0\u00a0 M - O - D - E\nA - C - T - I - V - A - T - E - D \u00a0\u00a0 !",
+            "På spansk hedder dark mode: 'Modo oscuro'. Det lyder lidt som en forbandelse fra Harry Potter, ik'?",
+            "På svensk hedder dark mode: 'Släck ljuset' - og de tror det er det samme som at slukke deres computer.",
+            "Ej, hvor er dark mode bare dejligt, var?",
+            "Er du tilfreds nu, Casper? Var det det her du ville have?",
+            "David Attenborough be like: \"And here we observe the developer... in its natural habitat... switching quietly... to Dark Mode.\"",
+            "Yoda be like: \"Dark Mode, you must enable. Yes, hmmm.\"",
+            "Morgan Freeman be like: \"And on that day... he turned on Dark Mode. And it was good.\"",
+            "Do you think Darth Vader calls it... khhhhh ...Daahhk Mode khhhhh ?",
+            "The french would be like: \"Ah, ze Daghk Meude, s'il vous plaît.\"",
+            "Owen Wilson be like: \"Wow. Wooow. Dark Mode.\"",
+            "Mike Tyson be like: \"I'm in Darth Mode. I mean... Dark Mode. Thame thing.\"",
+            "Tommy Wiseau be like: \"I did not use Light Mode, I did NAHT! Oh hi, Mark.\"",
+        ];
+
+        function randomSpeed() {
+            var s = 0.8 + Math.random() * 1.2;
+            return Math.random() < 0.5 ? s : -s;
+        }
+
+        function startDvd() {
+            active = true;
+            localStorage.setItem('dvdDark', '1');
+
+            var parrotIdx = 0;
+            parrotInterval = setInterval(function() {
+                if (parrotFrames.length > 0) {
+                    document.getElementById('favicon').href = parrotFrames[parrotIdx % parrotFrames.length];
+                    parrotIdx++;
+                }
+            }, 80);
+
+            var bannerText = '🌑  DARK  MODE  🌑              🌑  DARK  MODE  🌑              ';
+            var bannerWidth = 20;
+            var bannerPos = 0;
+            titleInterval = setInterval(function() {
+                var slice = bannerText.substring(bannerPos, bannerPos + bannerWidth);
+                if (slice.trim() === '') slice = '🌑';
+                document.title = slice;
+                bannerPos = (bannerPos + 1) % (bannerText.length / 2);
+            }, 150);
+
+            var content = document.getElementById('main-container');
+            if (!content) return;
+            var blocks = content.querySelectorAll(':scope > *:not(.hidden):not(.fixed)');
+            items = [];
+
+            // Capture positions BEFORE switching theme (to avoid reflow shift)
+            var rects = [];
+            blocks.forEach(function(el) {
+                rects.push(el.getBoundingClientRect());
+            });
+
+            // Now switch to dark mode
+            document.documentElement.classList.add('dark');
+            setToggleVisual(true);
+            document.body.style.overflow = 'hidden';
+
+            var winW = window.innerWidth;
+            var winH = window.innerHeight;
+
+            blocks.forEach(function(el, i) {
+                var rect = rects[i];
+                var x = rect.left;
+                var y = rect.top;
+                var w = rect.width;
+                var h = rect.height;
+
+                // Clamp within viewport so off-screen elements start at the edge
+                if (x < 0) x = 0;
+                if (x + w > winW) x = winW - w;
+                if (y < 0) y = 0;
+                if (y + h > winH) y = winH - h;
+
+                el._dvdOrig = el.getAttribute('style') || '';
+                el.style.position = 'fixed';
+                el.style.left = '0px';
+                el.style.top = '0px';
+                el.style.width = w + 'px';
+                el.style.zIndex = '40';
+                el.style.transition = 'none';
+                el.style.willChange = 'transform';
+                el.style.contain = 'layout style paint';
+                el.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+                el.style.outline = '3px solid ' + bounceColors[i % bounceColors.length];
+                el.style.outlineOffset = '-1px';
+                el.style.borderRadius = '8px';
+
+                items.push({
+                    el: el,
+                    x: x,
+                    y: y,
+                    w: w,
+                    h: h,
+                    vx: randomSpeed(),
+                    vy: randomSpeed(),
+                    hueIdx: i % bounceColors.length,
+                });
+            });
+
+            // Create floating quote box
+            quoteBox = document.createElement('div');
+            quoteBox.className = 'bg-gray-800 text-white rounded-lg shadow-xl p-5 text-center font-medium';
+            quoteBox.style.cssText = 'position:fixed;left:0;top:0;z-index:50;width:320px;max-width:90vw;will-change:transform;transition:none;pointer-events:none;white-space:pre-line;';
+            var startX = Math.random() * (winW - 320);
+            var startY = Math.random() * (winH - 100);
+            quoteBox.style.transform = 'translate(' + startX + 'px,' + startY + 'px)';
+            quoteBox.textContent = quotes[Math.floor(Math.random() * quotes.length)];
+            document.body.appendChild(quoteBox);
+
+            var qRect = quoteBox.getBoundingClientRect();
+            items.push({
+                el: quoteBox,
+                x: startX,
+                y: startY,
+                w: qRect.width,
+                h: qRect.height,
+                vx: randomSpeed(),
+                vy: randomSpeed(),
+                hueIdx: 0,
+                isQuote: true,
+            });
+
+            quoteInterval = setInterval(function() {
+                if (quoteBox) quoteBox.textContent = quotes[Math.floor(Math.random() * quotes.length)];
+            }, 5000);
+
+            rafId = requestAnimationFrame(tick);
+        }
+
+        function tick() {
+            if (!active) return;
+            var winW = window.innerWidth;
+            var winH = window.innerHeight;
+
+            items.forEach(function(it) {
+                it.x += it.vx;
+                it.y += it.vy;
+
+                var bounced = false;
+                if (it.x <= 0) { it.x = 0; it.vx = Math.abs(it.vx); bounced = true; }
+                if (it.x + it.w >= winW) { it.x = winW - it.w; it.vx = -Math.abs(it.vx); bounced = true; }
+                if (it.y <= 0) { it.y = 0; it.vy = Math.abs(it.vy); bounced = true; }
+                if (it.y + it.h >= winH) { it.y = winH - it.h; it.vy = -Math.abs(it.vy); bounced = true; }
+
+                if (bounced) {
+                    it.hueIdx = (it.hueIdx + 1) % bounceColors.length;
+                    it.el.style.outlineColor = bounceColors[it.hueIdx];
+                }
+
+                it.el.style.transform = 'translate(' + it.x + 'px,' + it.y + 'px)';
+            });
+
+            rafId = requestAnimationFrame(tick);
+        }
+
+        function stopDvd() {
+            active = false;
+            localStorage.removeItem('dvdDark');
+            if (rafId) cancelAnimationFrame(rafId);
+            if (quoteInterval) { clearInterval(quoteInterval); quoteInterval = null; }
+            if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
+            document.title = origTitle;
+            if (parrotInterval) { clearInterval(parrotInterval); parrotInterval = null; }
+            document.getElementById('favicon').href = parrotStatic;
+
+            items.forEach(function(it) {
+                if (it.isQuote) {
+                    it.el.remove();
+                } else {
+                    it.el.setAttribute('style', it.el._dvdOrig || '');
+                }
+            });
+
+            quoteBox = null;
+            items = [];
+            document.body.style.overflow = '';
+
+            // Switch back to light mode
+            document.documentElement.classList.remove('dark');
+            setToggleVisual(false);
+        }
+
+        themeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (active) stopDvd(); else startDvd();
+        });
+
+        // Auto-start if dark/DVD was active before page load
+        if (localStorage.getItem('dvdDark') === '1') {
+            startDvd();
+        }
+    })();
     </script>
 </body>
 </html>

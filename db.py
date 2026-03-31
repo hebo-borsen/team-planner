@@ -142,7 +142,7 @@ def clear_session_token(user_id):
 def get_all_users():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, display_name, email, role, days_off_per_year, accrued_days, start_date FROM users ORDER BY username")
+    cursor.execute("SELECT id, username, display_name, email, role, days_off_per_year, start_date, active FROM users ORDER BY active DESC, username")
     users = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -153,6 +153,24 @@ def set_user_role(user_id, role):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def toggle_user_active(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET active = NOT active WHERE id = %s", (user_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def update_display_name(user_id, display_name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET display_name = %s WHERE id = %s", (display_name, user_id))
     conn.commit()
     cursor.close()
     conn.close()
@@ -1074,7 +1092,7 @@ def set_event_response(event_id, member_id, is_attending):
 def get_all_users_for_calendar():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, display_name, initials, font FROM users ORDER BY username")
+    cursor.execute("SELECT id, username, display_name, initials, font FROM users WHERE active = TRUE ORDER BY username")
     users = cursor.fetchall()
     cursor.close()
     conn.close()
