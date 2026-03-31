@@ -9,58 +9,114 @@
     </button>
 </div>
 
-{% if vacations %}
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-    <table class="min-w-full text-sm">
-        <thead>
-            <tr class="bg-gray-100 dark:bg-gray-700">
-                <th class="px-4 py-3 text-left font-medium">Date</th>
-                <th class="px-4 py-3 text-left font-medium">Status</th>
-                <th class="px-4 py-3 text-right font-medium">Action</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            {% for vid, vdate, status, req_by, approved_by in vacations %}
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <td class="px-4 py-3 font-medium">{{ vdate|fmtdate }}</td>
-                <td class="px-4 py-3">
-                    {% if status == 'approved' %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
-                        Approved
-                    </span>
-                    {% elif status == 'pending' %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
-                        Pending approval
-                    </span>
-                    {% elif status == 'pending_removal' %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
-                        Removal pending
-                    </span>
+{% if groups %}
+<div class="space-y-4">
+    {% for g in groups %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 flex-wrap">
+                {% if g.status == 'approved' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
+                    Approved
+                </span>
+                {% elif g.status == 'pending' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                    Pending approval
+                </span>
+                {% elif g.status == 'pending_removal' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
+                    Removal pending
+                </span>
+                {% endif %}
+                <span class="text-sm text-gray-500 dark:text-gray-400">
+                    {% if g.count == 1 %}
+                        {{ g.start_date|fmtdate }}
+                        <span class="text-gray-400 dark:text-gray-500">({{ g.start_date.strftime('%A') }})</span>
+                    {% else %}
+                        {{ g.start_date|fmtdate }} &ndash; {{ g.end_date|fmtdate }}
+                        <span class="text-gray-400 dark:text-gray-500">({{ g.count }} days)</span>
                     {% endif %}
-                </td>
-                <td class="px-4 py-3 text-right">
-                    {% if status == 'pending' %}
-                    <form method="post" action="/vacations/{{ vid }}/cancel" class="inline">
-                        <button type="submit"
-                                class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded">
-                            Cancel
-                        </button>
-                    </form>
-                    {% elif status == 'approved' %}
-                    <form method="post" action="/vacations/{{ vid }}/request-removal" class="inline">
-                        <button type="submit"
-                                class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded">
-                            Request Removal
-                        </button>
-                    </form>
-                    {% elif status == 'pending_removal' %}
-                    <span class="text-xs text-gray-400">Awaiting approval...</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                </span>
+            </div>
+            <div class="inline-flex gap-2 shrink-0">
+                {% if g.status == 'pending' %}
+                <form method="post" action="/vacations/bulk-cancel" class="inline">
+                    {% for vid in g.ids %}
+                    <input type="hidden" name="ids" value="{{ vid }}">
+                    {% endfor %}
+                    <button type="submit"
+                            class="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded">
+                        Cancel{% if g.count > 1 %} ({{ g.count }} days){% endif %}
+                    </button>
+                </form>
+                {% elif g.status == 'approved' %}
+                <form method="post" action="/vacations/bulk-removal" class="inline">
+                    {% for vid in g.ids %}
+                    <input type="hidden" name="ids" value="{{ vid }}">
+                    {% endfor %}
+                    <button type="submit"
+                            class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded">
+                        {{ 'Delete' if is_admin else 'Request Removal' }}{% if g.count > 1 %} ({{ g.count }} days){% endif %}
+                    </button>
+                </form>
+                {% elif g.status == 'pending_removal' %}
+                <span class="text-xs text-gray-400">Awaiting approval...</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Mini calendar -->
+        {% set date_set = g.dates %}
+        {% set first_monday = g.start_date.toordinal() - g.start_date.weekday() %}
+        {% set last_sunday = g.end_date.toordinal() + (6 - g.end_date.weekday()) %}
+        <div class="px-4 py-3">
+            <table class="text-xs w-auto">
+                <thead>
+                    <tr class="text-gray-400 dark:text-gray-500">
+                        <th class="px-1.5 py-0.5 font-medium">Mon</th>
+                        <th class="px-1.5 py-0.5 font-medium">Tue</th>
+                        <th class="px-1.5 py-0.5 font-medium">Wed</th>
+                        <th class="px-1.5 py-0.5 font-medium">Thu</th>
+                        <th class="px-1.5 py-0.5 font-medium">Fri</th>
+                        <th class="px-1.5 py-0.5 font-medium text-gray-300 dark:text-gray-600">Sat</th>
+                        <th class="px-1.5 py-0.5 font-medium text-gray-300 dark:text-gray-600">Sun</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for week_start_ord in range(first_monday, last_sunday + 1, 7) %}
+                    <tr>
+                        {% for dow in range(7) %}
+                        {% set day_ord = week_start_ord + dow %}
+                        {% set day_date = g.start_date.fromordinal(day_ord) %}
+                        {% set is_requested = day_date in date_set %}
+                        {% set is_holiday = day_date in holidays %}
+                        {% set is_weekend = dow >= 5 %}
+                        <td class="px-1.5 py-1 text-center rounded
+                            {% if is_requested %}
+                                {% if g.status == 'approved' %}
+                                    bg-green-400 dark:bg-green-600 text-white font-semibold
+                                {% elif g.status == 'pending' %}
+                                    bg-amber-400 dark:bg-amber-600 text-white font-semibold
+                                {% elif g.status == 'pending_removal' %}
+                                    bg-red-400 dark:bg-red-600 text-white font-semibold
+                                {% endif %}
+                            {% elif is_holiday %}
+                                bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400
+                            {% elif is_weekend %}
+                                text-gray-300 dark:text-gray-600
+                            {% else %}
+                                text-gray-500 dark:text-gray-400
+                            {% endif %}">
+                            {{ day_date.day }}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
 </div>
 {% else %}
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-gray-500 dark:text-gray-400">

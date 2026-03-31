@@ -421,6 +421,65 @@ def delete_vacation(vacation_id):
     return redirect(url_for('calendar_view'))
 
 
+@app.route('/vacations/remove-by-dates', methods=['POST'])
+@login_required
+def remove_vacations_by_dates():
+    user_id = request.form.get('user_id', type=int)
+    start = request.form.get('start_date')
+    end = request.form.get('end_date')
+    if not user_id or not start or not end:
+        flash('Missing parameters.', 'error')
+        return redirect(url_for('calendar_view'))
+    # Non-admins can only remove their own vacations
+    if session.get('role') != 'admin' and user_id != session.get('user_id'):
+        flash('You can only remove your own vacations.', 'error')
+        return redirect(url_for('calendar_view'))
+    start_date = date.fromisoformat(start)
+    end_date = date.fromisoformat(end)
+    if session.get('role') == 'admin':
+        ids = db.get_vacation_ids_for_user_dates(
+            user_id, start_date, end_date, ['approved', 'pending', 'pending_removal'])
+        if ids:
+            deleted = db.delete_vacation_bulk(ids)
+            flash(f'Deleted {deleted} vacation day(s).', 'success')
+        else:
+            flash('No vacation days found in that range.', 'warning')
+    else:
+        ids = db.get_vacation_ids_for_user_dates(
+            user_id, start_date, end_date, ['approved'])
+        if ids:
+            updated = db.request_vacation_removal_bulk(ids)
+            flash(f'Removal requested for {updated} day(s).', 'info')
+        else:
+            flash('No approved vacation days found in that range.', 'warning')
+    return redirect(url_for('calendar_view'))
+
+
+@app.route('/vacations/approve-by-dates', methods=['POST'])
+@admin_required
+def approve_vacations_by_dates():
+    user_id = request.form.get('user_id', type=int)
+    start = request.form.get('start_date')
+    end = request.form.get('end_date')
+    action = request.form.get('action')
+    if not user_id or not start or not end or action not in ('approve', 'reject'):
+        flash('Missing parameters.', 'error')
+        return redirect(url_for('calendar_view'))
+    start_date = date.fromisoformat(start)
+    end_date = date.fromisoformat(end)
+    ids = db.get_vacation_ids_for_user_dates(user_id, start_date, end_date, ['pending'])
+    if not ids:
+        flash('No pending requests found in that range.', 'warning')
+        return redirect(url_for('calendar_view'))
+    if action == 'approve':
+        db.approve_vacation_bulk(ids, session['username'])
+        flash(f'Approved {len(ids)} vacation day(s).', 'success')
+    else:
+        db.reject_vacation_bulk(ids)
+        flash(f'Rejected {len(ids)} vacation day(s).', 'success')
+    return redirect(url_for('calendar_view'))
+
+
 @app.route('/vacations/export')
 @login_required
 def export_vacations():
@@ -503,8 +562,10 @@ def bulk_approve():
 @app.route('/my-vacations')
 @login_required
 def my_vacations():
-    vacations = db.get_user_vacations(session['user_id'])
-    return render_template('my_vacations.html', vacations=vacations, active_tab='my_vacations')
+    groups = db.get_user_vacations_grouped(session['user_id'])
+    holidays = db.get_all_enabled_holidays()
+    return render_template('my_vacations.html', groups=groups,
+                           holidays=holidays, active_tab='my_vacations')
 
 
 @app.route('/vacations/<int:vacation_day_id>/request-removal', methods=['POST'])
@@ -527,6 +588,37 @@ def cancel_request(vacation_day_id):
         flash('Pending request cancelled.', 'success')
     else:
         flash('Could not cancel request.', 'warning')
+    return redirect(url_for('my_vacations'))
+
+
+@app.route('/vacations/bulk-removal', methods=['POST'])
+@login_required
+def bulk_request_removal():
+    ids = request.form.getlist('ids', type=int)
+    if not ids:
+        flash('No vacation days selected.', 'warning')
+        return redirect(url_for('my_vacations'))
+    if session.get('role') == 'admin':
+        deleted = db.delete_vacation_bulk(ids)
+        flash(f'{deleted} vacation day(s) deleted.', 'success')
+    else:
+        updated = db.request_vacation_removal_bulk(ids)
+        flash(f'Removal requested for {updated} day(s).', 'info')
+    return redirect(url_for('my_vacations'))
+
+
+@app.route('/vacations/bulk-cancel', methods=['POST'])
+@login_required
+def bulk_cancel_request():
+    ids = request.form.getlist('ids', type=int)
+    if not ids:
+        flash('No vacation days selected.', 'warning')
+        return redirect(url_for('my_vacations'))
+    deleted = db.cancel_pending_request_bulk(ids, session['username'])
+    if deleted:
+        flash(f'{deleted} pending request(s) cancelled.', 'success')
+    else:
+        flash('Could not cancel requests.', 'warning')
     return redirect(url_for('my_vacations'))
 
 
@@ -732,6 +824,19 @@ def set_days_off(user_id):
         return redirect(url_for('user_management'))
     db.update_days_off(user_id, days_off)
     flash('Days off updated.', 'success')
+    return redirect(url_for('user_management'))
+
+
+@app.route('/users/<int:user_id>/start-date', methods=['POST'])
+@admin_required
+def set_start_date(user_id):
+    start_date_str = request.form.get('start_date')
+    if not start_date_str:
+        db.update_start_date(user_id, None)
+        flash('Start date cleared.', 'success')
+    else:
+        db.update_start_date(user_id, date.fromisoformat(start_date_str))
+        flash('Start date updated.', 'success')
     return redirect(url_for('user_management'))
 
 

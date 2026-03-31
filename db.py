@@ -142,7 +142,7 @@ def clear_session_token(user_id):
 def get_all_users():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, display_name, email, role, days_off_per_year, accrued_days FROM users ORDER BY username")
+    cursor.execute("SELECT id, username, display_name, email, role, days_off_per_year, accrued_days, start_date FROM users ORDER BY username")
     users = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -153,6 +153,15 @@ def set_user_role(user_id, role):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def update_start_date(user_id, start_date):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET start_date = %s WHERE id = %s", (start_date, user_id))
     conn.commit()
     cursor.close()
     conn.close()
@@ -215,7 +224,7 @@ def get_vacation_summary(user_id, period_start, period_end):
     months_elapsed = (today.year - accrual_start.year) * 12 + today.month - accrual_start.month
     if months_elapsed < 0:
         months_elapsed = 0
-    accrued = round(entitlement / 12 * months_elapsed, 1)
+    accrued = round(float(base_days) / 12 * months_elapsed, 1)
 
     return {
         'days_off_per_year': entitlement,
@@ -223,6 +232,9 @@ def get_vacation_summary(user_id, period_start, period_end):
         'pending': pending,
         'remaining': entitlement - used,
         'accrued': accrued,
+        'accrual_start': accrual_start,
+        'months_elapsed': months_elapsed,
+        'base_days': float(base_days),
     }
 
 
@@ -792,6 +804,129 @@ def get_user_vacations(user_id):
     cursor.close()
     conn.close()
     return rows
+
+
+def get_user_vacations_grouped(user_id):
+    """Group a user's vacations into periods by status + created_at."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT vd.id, vd.vacation_date, vd.status, vd.requested_by,
+               vd.approved_by, vd.created_at
+        FROM vacation_days vd
+        JOIN team_members tm ON vd.member_id = tm.id
+        JOIN users u ON u.username = tm.name
+        WHERE u.id = %s
+        ORDER BY vd.status, vd.created_at, vd.vacation_date
+    """, (user_id,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    groups = []
+    current = None
+    for vid, vdate, status, req_by, approved_by, created_at in rows:
+        if (current and current['status'] == status
+                and current['created_at'] == created_at):
+            current['ids'].append(vid)
+            current['dates'].append(vdate)
+            current['end_date'] = vdate
+            current['count'] += 1
+        else:
+            if current:
+                groups.append(current)
+            current = {
+                'ids': [vid],
+                'dates': [vdate],
+                'status': status,
+                'start_date': vdate,
+                'end_date': vdate,
+                'req_by': req_by,
+                'approved_by': approved_by,
+                'created_at': created_at,
+                'count': 1,
+            }
+    if current:
+        groups.append(current)
+
+    # Sort by start_date so periods appear chronologically
+    groups.sort(key=lambda g: g['start_date'])
+    return groups
+
+
+def request_vacation_removal_bulk(ids):
+    """Mark multiple approved vacation days as pending_removal."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    fmt = ','.join(['%s'] * len(ids))
+    cursor.execute(
+        f"UPDATE vacation_days SET status = 'pending_removal' "
+        f"WHERE id IN ({fmt}) AND status = 'approved'",
+        tuple(ids)
+    )
+    updated = cursor.rowcount
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return updated
+
+
+def delete_vacation_bulk(ids):
+    """Delete multiple vacation days (admin use)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    fmt = ','.join(['%s'] * len(ids))
+    cursor.execute(f"DELETE FROM vacation_days WHERE id IN ({fmt})", tuple(ids))
+    deleted = cursor.rowcount
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return deleted
+
+
+def get_vacation_ids_for_user_dates(user_id, start_date, end_date, statuses=None):
+    """Return vacation_day IDs for a user within a date range, optionally filtered by status."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if statuses:
+        fmt = ','.join(['%s'] * len(statuses))
+        cursor.execute(f"""
+            SELECT vd.id FROM vacation_days vd
+            JOIN team_members tm ON vd.member_id = tm.id
+            JOIN users u ON u.username = tm.name
+            WHERE u.id = %s AND vd.vacation_date BETWEEN %s AND %s
+              AND vd.status IN ({fmt})
+            ORDER BY vd.vacation_date
+        """, (user_id, start_date, end_date) + tuple(statuses))
+    else:
+        cursor.execute("""
+            SELECT vd.id FROM vacation_days vd
+            JOIN team_members tm ON vd.member_id = tm.id
+            JOIN users u ON u.username = tm.name
+            WHERE u.id = %s AND vd.vacation_date BETWEEN %s AND %s
+            ORDER BY vd.vacation_date
+        """, (user_id, start_date, end_date))
+    ids = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return ids
+
+
+def cancel_pending_request_bulk(ids, username):
+    """Cancel multiple pending vacation requests."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    fmt = ','.join(['%s'] * len(ids))
+    cursor.execute(
+        f"DELETE FROM vacation_days WHERE id IN ({fmt}) "
+        f"AND status = 'pending' AND requested_by = %s",
+        tuple(ids) + (username,)
+    )
+    deleted = cursor.rowcount
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return deleted
 
 
 # ---------------------------------------------------------------------------
