@@ -1,0 +1,28 @@
+{% if members %}
+<table class="w-full text-sm">
+    <thead>
+        <tr class="border-b border-gray-200 dark:border-gray-700">
+            <th class="text-left py-2 font-medium">Member</th>
+            <th class="text-right py-2 font-medium">Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for mid, mname, memoji in members %}
+        <tr class="border-b border-gray-100 dark:border-gray-700/50">
+            <td class="py-2">{{ memoji }} {{ mname }}</td>
+            <td class="py-2 text-right">
+                <button hx-delete="/admin/team/{{ mid }}"
+                        hx-target="#team-list"
+                        hx-swap="innerHTML"
+                        hx-confirm="Delete {{ mname }}? This will also remove their vacations and event responses."
+                        class="text-red-600 dark:text-red-400 hover:underline text-xs">
+                    Delete
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="text-sm text-gray-500 dark:text-gray-400">No team members yet.</p>
+{% endif %}

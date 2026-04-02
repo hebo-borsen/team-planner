@@ -1,0 +1,105 @@
+<style>
+tr.cal-hover:hover { outline: 2px solid rgba(59,130,246,0.5); outline-offset: -2px; }
+tr.cal-hover:hover td { position: relative; }
+tr.cal-hover td:hover::after {
+    content: ''; position: absolute; inset: 0;
+    background-color: rgba(0,0,0,0.12); pointer-events: none; border-radius: 2px;
+}
+.dark tr.cal-hover td:hover::after { background-color: rgba(255,255,255,0.10); }
+</style>
+<div class="overflow-x-auto">
+    <table class="min-w-full text-sm border border-gray-200 dark:border-gray-700">
+        <thead>
+            <tr class="bg-green-50 dark:bg-green-900/20">
+                <th class="px-3 py-1.5 text-left font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-green-50 dark:bg-green-900/20 z-10 whitespace-nowrap">
+                    National Holidays
+                </th>
+                {% for day in days %}
+                <th class="px-1 text-center border border-gray-200 dark:border-gray-700 min-w-[2.5rem]
+                    {{ 'bg-green-500 text-white' if day in holiday_dict else '' }}"
+                    {% if day in holiday_dict %}title="{{ holiday_dict[day] }}"{% endif %}>
+                    {% if day in holiday_dict %}
+                    <div class="h-20 flex items-end justify-center pb-1">
+                        <span class="text-[10px] font-bold whitespace-nowrap" style="writing-mode: vertical-rl; transform: rotate(180deg);">{{ holiday_dict[day] }}</span>
+                    </div>
+                    {% endif %}
+                </th>
+                {% endfor %}
+            </tr>
+            <tr class="bg-gray-100 dark:bg-gray-800">
+                <th class="px-3 py-2 text-left font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-gray-100 dark:bg-gray-800 z-10">
+                </th>
+                {% for day in days %}
+                <th class="px-1 py-1 text-center font-medium border border-gray-200 dark:border-gray-700 min-w-[2.5rem]
+                    {{ 'bg-gray-200 dark:bg-gray-700' if day in weekend_days else '' }}
+                    {{ 'bg-green-100 dark:bg-green-900/30' if day in holiday_dict and day not in weekend_days else '' }}"
+                    title="{{ day|fmtdate }}">
+                    {% if day.day == 1 or loop.first %}
+                    <div class="text-[10px] text-gray-500 dark:text-gray-400 font-normal leading-tight">{{ day.strftime('%b') }}</div>
+                    {% endif %}
+                    <div class="leading-tight">{{ day.day }}</div>
+                    <div class="text-[10px] text-gray-400 dark:text-gray-500 font-normal leading-tight">{{ day.strftime('%a')[:2] }}</div>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for uid, uname, udisplay_name, uinitials, ufont in users %}
+            {% set display = udisplay_name or uname %}
+            {% set selectable = is_admin or uid == user_id %}
+            <tr class="{{ 'cal-row cal-hover' if selectable else '' }}" data-uid="{{ uid }}">
+                <td class="px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-900 z-10 whitespace-nowrap"
+                    {% if ufont %}style="font-family: '{{ ufont }}', cursive;"{% endif %}>
+                    {{ display }}
+                </td>
+                {% set user_vacs = vacation_dict.get(display, []) %}
+                {% set user_pending = pending_dict.get(display, []) %}
+                {% set user_removal = removal_dict.get(display, []) %}
+                {% for day in days %}
+                {% set cell_type = 'removal' if day in user_removal else ('pending' if day in user_pending else ('vacation' if day in user_vacs else ('weekend' if day in weekend_days else ('holiday' if day in holiday_dict else 'empty')))) %}
+                <td class="{{ 'cal-cell' if selectable else '' }} px-1 py-1.5 text-center border border-gray-200 dark:border-gray-700
+                    {{ 'cursor-pointer' if selectable else '' }}
+                    {{ 'bg-gray-200 dark:bg-gray-700' if day in weekend_days else '' }}
+                    {{ 'bg-green-100 dark:bg-green-900/30' if day in holiday_dict and day not in weekend_days and day not in user_vacs and day not in user_pending and day not in user_removal else '' }}
+                    {{ 'bg-blue-500 text-white font-bold' if day in user_vacs and day not in user_removal else '' }}
+                    {{ 'bg-amber-300 dark:bg-amber-600 text-amber-900 dark:text-amber-100 font-bold' if day in user_pending else '' }}
+                    {{ 'bg-blue-500 text-white font-bold ring-2 ring-red-500 ring-inset' if day in user_removal else '' }}"
+                    data-date="{{ day.isoformat() }}" data-type="{{ cell_type }}"
+                    {% if day in user_pending %}title="Pending approval"{% endif %}
+                    {% if day in user_removal %}title="Removal requested"{% endif %}>
+                    {{ 'V' if day in user_vacs and day not in user_removal else '' }}{{ '?' if day in user_pending else '' }}{{ 'V' if day in user_removal else '' }}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            {% set month_colors = ['bg-blue-100 dark:bg-blue-900/30', 'bg-purple-100 dark:bg-purple-900/30', 'bg-teal-100 dark:bg-teal-900/30', 'bg-orange-100 dark:bg-orange-900/30', 'bg-pink-100 dark:bg-pink-900/30', 'bg-cyan-100 dark:bg-cyan-900/30', 'bg-amber-100 dark:bg-amber-900/30', 'bg-indigo-100 dark:bg-indigo-900/30', 'bg-lime-100 dark:bg-lime-900/30', 'bg-rose-100 dark:bg-rose-900/30', 'bg-emerald-100 dark:bg-emerald-900/30', 'bg-violet-100 dark:bg-violet-900/30'] %}
+            {% set ns = namespace(spans=[], cur_label='', cur_count=0, cur_color_idx=0) %}
+            {% for day in days %}
+                {% set label = day.strftime('%Y - %B') %}
+                {% if label != ns.cur_label %}
+                    {% if ns.cur_label %}
+                        {% set _ = ns.spans.append({'label': ns.cur_label, 'count': ns.cur_count, 'color': month_colors[ns.cur_color_idx % 12]}) %}
+                        {% set ns.cur_color_idx = ns.cur_color_idx + 1 %}
+                    {% endif %}
+                    {% set ns.cur_label = label %}
+                    {% set ns.cur_count = 1 %}
+                {% else %}
+                    {% set ns.cur_count = ns.cur_count + 1 %}
+                {% endif %}
+            {% endfor %}
+            {% if ns.cur_label %}
+                {% set _ = ns.spans.append({'label': ns.cur_label, 'count': ns.cur_count, 'color': month_colors[ns.cur_color_idx % 12]}) %}
+            {% endif %}
+            <tr>
+                <td class="px-3 py-1.5 border border-gray-200 dark:border-gray-700 sticky left-0 bg-gray-100 dark:bg-gray-800 z-10"></td>
+                {% for span in ns.spans %}
+                <td colspan="{{ span.count }}" class="px-1 py-1 text-left text-[10px] font-medium border border-gray-200 dark:border-gray-700 {{ span.color }}">
+                    {{ span.label }}
+                </td>
+                {% endfor %}
+            </tr>
+        </tfoot>
+    </table>
+</div>

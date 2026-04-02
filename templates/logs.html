@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Operation Logs</h1>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+    <form method="get" action="/logs" class="flex items-end gap-4">
+        <div>
+            <label class="block text-sm font-medium mb-1">User</label>
+            <select name="user_id"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+                <option value="">All users</option>
+                {% for uid, uname in users %}
+                <option value="{{ uid }}" {{ 'selected' if filter_user_id == uid }}>{{ uname }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">Operation type</label>
+            <select name="operation_type"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+                <option value="">All types</option>
+                <option value="holiday_recalculation" {{ 'selected' if filter_operation_type == 'holiday_recalculation' }}>Holiday recalculation</option>
+                <option value="setting_update" {{ 'selected' if filter_operation_type == 'setting_update' }}>Setting update</option>
+            </select>
+        </div>
+        <button type="submit"
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+            Filter
+        </button>
+        {% if filter_user_id or filter_operation_type %}
+        <a href="/logs" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
+            Clear
+        </a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+    <table class="min-w-full text-sm">
+        <thead>
+            <tr class="bg-gray-100 dark:bg-gray-700">
+                <th class="px-4 py-3 text-left font-medium">Time</th>
+                <th class="px-4 py-3 text-left font-medium">User</th>
+                <th class="px-4 py-3 text-left font-medium">Type</th>
+                <th class="px-4 py-3 text-left font-medium">Message</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for id, user_id, username, op_type, message, created_at in entries %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ created_at|fmtdatetime }}</td>
+                <td class="px-4 py-3 whitespace-nowrap">{{ username or '-' }}</td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                        {{ 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200' if op_type == 'holiday_recalculation' else 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' }}">
+                        {{ op_type }}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ message }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" class="px-4 py-8 text-center text-gray-400">No log entries found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

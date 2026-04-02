@@ -1,0 +1,127 @@
+{% if groups %}
+<!-- Approve All -->
+{% set all_pending_ids = [] %}
+{% for g in groups %}{% if g.status == 'pending' %}{% for vid in g.ids %}{% if all_pending_ids.append(vid) %}{% endif %}{% endfor %}{% endif %}{% endfor %}
+{% if all_pending_ids|length > 1 %}
+<div class="mb-4">
+    <form hx-post="/approvals/bulk" hx-target="#approval-list" hx-swap="innerHTML">
+        {% for vid in all_pending_ids %}
+        <input type="hidden" name="ids" value="{{ vid }}">
+        {% endfor %}
+        <input type="hidden" name="action" value="approve">
+        <button type="submit"
+                hx-confirm="Approve all {{ all_pending_ids|length }} pending day(s)?"
+                class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg">
+            Approve all ({{ all_pending_ids|length }} days)
+        </button>
+    </form>
+</div>
+{% endif %}
+
+<div class="space-y-4">
+    {% for g in groups %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="font-semibold">{{ g.display }}</span>
+                {% if g.status == 'pending' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                    New request
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
+                    Removal request
+                </span>
+                {% endif %}
+                <span class="text-sm text-gray-500 dark:text-gray-400">
+                    {% if g.count == 1 %}
+                        {{ g.start_date|fmtdate }}
+                        <span class="text-gray-400 dark:text-gray-500">({{ g.start_date.strftime('%A') }})</span>
+                    {% else %}
+                        {{ g.start_date|fmtdate }} &ndash; {{ g.end_date|fmtdate }}
+                        <span class="text-gray-400 dark:text-gray-500">({{ g.count }} days)</span>
+                    {% endif %}
+                </span>
+                {% if g.req_by %}
+                <span class="text-xs text-gray-400 dark:text-gray-500">by {{ g.req_by }}</span>
+                {% endif %}
+            </div>
+            <div class="inline-flex gap-2 shrink-0">
+                <form hx-post="/approvals/bulk" hx-target="#approval-list" hx-swap="innerHTML" class="inline">
+                    {% for vid in g.ids %}
+                    <input type="hidden" name="ids" value="{{ vid }}">
+                    {% endfor %}
+                    <input type="hidden" name="action" value="approve">
+                    <button type="submit"
+                            class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded">
+                        Approve{% if g.count > 1 %} ({{ g.count }} days){% endif %}
+                    </button>
+                </form>
+                <form hx-post="/approvals/bulk" hx-target="#approval-list" hx-swap="innerHTML" class="inline">
+                    {% for vid in g.ids %}
+                    <input type="hidden" name="ids" value="{{ vid }}">
+                    {% endfor %}
+                    <input type="hidden" name="action" value="reject">
+                    <button type="submit"
+                            hx-confirm="Reject this request?"
+                            class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded">
+                        Reject
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Mini calendar -->
+        {% set date_set = g.dates %}
+        {% set ns = namespace(weeks=[]) %}
+        {# Build calendar weeks from Monday of start_date's week to Sunday of end_date's week #}
+        {% set first_monday = g.start_date.toordinal() - g.start_date.weekday() %}
+        {% set last_sunday = g.end_date.toordinal() + (6 - g.end_date.weekday()) %}
+        <div class="px-4 py-3">
+            <table class="text-xs w-auto">
+                <thead>
+                    <tr class="text-gray-400 dark:text-gray-500">
+                        <th class="px-1.5 py-0.5 font-medium">Mon</th>
+                        <th class="px-1.5 py-0.5 font-medium">Tue</th>
+                        <th class="px-1.5 py-0.5 font-medium">Wed</th>
+                        <th class="px-1.5 py-0.5 font-medium">Thu</th>
+                        <th class="px-1.5 py-0.5 font-medium">Fri</th>
+                        <th class="px-1.5 py-0.5 font-medium text-gray-300 dark:text-gray-600">Sat</th>
+                        <th class="px-1.5 py-0.5 font-medium text-gray-300 dark:text-gray-600">Sun</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for week_start_ord in range(first_monday, last_sunday + 1, 7) %}
+                    <tr>
+                        {% for dow in range(7) %}
+                        {% set day_ord = week_start_ord + dow %}
+                        {% set day_date = g.start_date.fromordinal(day_ord) %}
+                        {% set is_requested = day_date in date_set %}
+                        {% set is_holiday = day_date in holidays %}
+                        {% set is_weekend = dow >= 5 %}
+                        <td class="px-1.5 py-1 text-center rounded
+                            {% if is_requested %}
+                                bg-amber-400 dark:bg-amber-600 text-white font-semibold
+                            {% elif is_holiday %}
+                                bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400
+                            {% elif is_weekend %}
+                                text-gray-300 dark:text-gray-600
+                            {% else %}
+                                text-gray-500 dark:text-gray-400
+                            {% endif %}">
+                            {{ day_date.day }}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center text-gray-500 dark:text-gray-400">
+    No pending requests.
+</div>
+{% endif %}

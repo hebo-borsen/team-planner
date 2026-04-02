@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en" class="{{ 'dark' if theme == 'dark' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Team Vacation Planner{% endblock %}</title>
+    <link id="favicon" rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦜</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+        // Apply dark mode immediately from localStorage to avoid flash
+        if (localStorage.getItem('dvdDark') === '1') {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Amatic+SC&family=Audiowide&family=Bangers&family=Baumans&family=Black+Ops+One&family=Bowlby+One+SC&family=Bungee&family=Bungee+Inline&family=Bungee+Shade&family=Butcherman&family=Cabin+Sketch&family=Caesar+Dressing&family=Caveat&family=Ceviche+One&family=Cherry+Bomb+One&family=Cinzel+Decorative&family=Coiny&family=Comforter&family=Concert+One&family=Covered+By+Your+Grace&family=Creepster&family=Cute+Font&family=Dancing+Script&family=Dokdo&family=Eater&family=Fascinate+Inline&family=Faster+One&family=Finger+Paint&family=Flamenco&family=Flavors&family=Fontdiner+Swanky&family=Freckle+Face&family=Fredericka+the+Great&family=Frijole&family=Fugaz+One&family=Gaegu&family=Geostar+Fill&family=Glass+Antiqua&family=Gloria+Hallelujah&family=Gorditas&family=Graduate&family=Gravitas+One&family=Griffy&family=Gugi&family=Henny+Penny&family=Hi+Melody&family=Homemade+Apple&family=Honk&family=Iceberg&family=Irish+Grover&family=Jacques+Francois+Shadow&family=Jolly+Lodger&family=Joti+One&family=Julee&family=Kavoon&family=Kirang+Haerang&family=Kumar+One+Outline&family=Lacquer&family=Lakki+Reddy&family=Lobster&family=Love+Ya+Like+A+Sister&family=Luckiest+Guy&family=Megrim&family=Metal+Mania&family=Miltonian+Tattoo&family=Modak&family=Monoton&family=Mystery+Quest&family=Nabla&family=Nerko+One&family=Nosifer&family=Oi&family=Orbitron&family=Pacifico&family=Palette+Mosaic&family=Permanent+Marker&family=Piedra&family=Pirata+One&family=Plaster&family=Poiret+One&family=Potta+One&family=Press+Start+2P&family=Rampart+One&family=Rock+Salt&family=Rubik+Bubbles&family=Rubik+Moonrocks&family=Rye&family=Sacramento&family=Satisfy&family=Shadows+Into+Light&family=Shrikhand&family=Silkscreen&family=Smokum&family=Special+Elite&family=Srisakdi&family=Stalinist+One&family=UnifrakturMaguntia&family=Vast+Shadow&family=Wallpoet&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+
+    {% block nav %}
+    <nav class="bg-white dark:bg-gray-800 shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-1">
+                    <a href="/" class="text-lg font-semibold px-3 py-1">Team Planner</a>
+                    {% if username %}
+                    <a href="/"
+                       class="px-3 py-1.5 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'calendar' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                        Calendar
+                    </a>
+                    <a href="/my-vacations"
+                       class="px-3 py-1.5 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'my_vacations' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                        My Vacations
+                    </a>
+                    {% if is_admin %}
+                    <a href="/approvals"
+                       class="px-3 py-1.5 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'approvals' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                        Approvals
+                        {% if pending_count %}
+                        <span class="ml-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ pending_count }}</span>
+                        {% endif %}
+                    </a>
+                    {% endif %}
+                    {% endif %}
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    {% if username %}
+                    <button id="theme-toggle" title="Toggle theme"
+                            class="inline-flex items-center gap-0.5 px-1.5 py-1 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 select-none cursor-pointer">
+                        <span class="theme-sun px-1 rounded {{ 'bg-amber-200 dark:bg-transparent' }}">☀</span>
+                        <span class="theme-moon px-1 rounded {{ 'bg-transparent dark:bg-indigo-500 dark:text-white' }}">☾</span>
+                    </button>
+                    {% if is_admin %}
+                    <a href="/users"
+                       class="px-3 py-1.5 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'user_management' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                        Users
+                    </a>
+                    <a href="/settings"
+                       class="px-3 py-1.5 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'settings' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                        Settings
+                    </a>
+                    {% endif %}
+                    <div class="relative">
+                        <button onclick="this.parentElement.querySelector('.dropdown-menu').classList.toggle('hidden')"
+                                class="px-3 py-1.5 rounded text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                {% if user_font %}style="font-family: '{{ user_font }}', cursive;"{% endif %}>
+                            {{ initials }}
+                        </button>
+                        <div class="dropdown-menu hidden absolute right-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                            <a href="/profile"
+                               class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                Profile
+                            </a>
+                            <form method="post" action="/logout">
+                                <button type="submit"
+                                        class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
+                                    Log out
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    {% endblock %}
+
+    <main id="main-container" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="mb-4 space-y-2">
+            {% for category, message in messages %}
+            <div class="px-4 py-3 rounded-lg text-sm
+                {{ 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' if category == 'success' else '' }}
+                {{ 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200' if category == 'error' else '' }}
+                {{ 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200' if category == 'info' else '' }}
+                {{ 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200' if category == 'warning' else '' }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        document.addEventListener('click', function(e) {
+            document.querySelectorAll('.dropdown-menu').forEach(function(menu) {
+                if (!menu.parentElement.contains(e.target)) {
+                    menu.classList.add('hidden');
+                }
+            });
+        });
+    </script>
+    <script>
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.fixed.inset-0.z-50:not(.hidden)').forEach(function(m) {
+                m.classList.add('hidden');
+            });
+        }
+    });
+    </script>
+
+    <!-- DVD Mode Easter Egg: triggers when clicking the dark mode toggle -->
+    <script>
+    (function() {
+        var themeBtn = document.getElementById('theme-toggle');
+        if (!themeBtn) return;
+        var sunEl = themeBtn.querySelector('.theme-sun');
+        var moonEl = themeBtn.querySelector('.theme-moon');
+
+        function setToggleVisual(dark) {
+            if (dark) {
+                sunEl.className = 'theme-sun px-1 rounded bg-transparent opacity-50';
+                moonEl.className = 'theme-moon px-1 rounded bg-indigo-500 text-white';
+            } else {
+                sunEl.className = 'theme-sun px-1 rounded bg-amber-200';
+                moonEl.className = 'theme-moon px-1 rounded bg-transparent opacity-50';
+            }
+        }
+
+        var active = false;
+        var titleInterval = null;
+        var origTitle = document.title;
+        var parrotFrames = [];
+        var parrotInterval = null;
+        var parrotStatic = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦜</text></svg>";
+        (function buildParrotFrames() {
+            var canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            var ctx = canvas.getContext('2d');
+            var hues = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
+            var loaded = 0;
+            hues.forEach(function(h) {
+                var svg = new Image();
+                svg.onload = function() {
+                    ctx.clearRect(0, 0, 64, 64);
+                    ctx.filter = 'hue-rotate(' + h + 'deg) saturate(2)';
+                    ctx.drawImage(svg, 0, 0, 64, 64);
+                    ctx.filter = 'none';
+                    parrotFrames.push(canvas.toDataURL('image/png'));
+                    loaded++;
+                };
+                svg.src = "data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦜</text></svg>");
+            });
+        })();
+        var rafId = null;
+        var items = [];
+        var bounceColors = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
+        var quoteBox = null;
+        var quoteInterval = null;
+        var quotes = [
+            "Tror du pirater kalder det 'Daaaaarrrrrrggggggk mode'?",
+            "Fun fact: Dark mode sparer 0.003% batteri. Men denne animation æder det nok op i hukommelsesforbrug.",
+            "Tror du også Batman bruger dark mode?",
+            "Hvis man siger 'dark mode' tre gange foran spejlet, tror du så der dukker en backend udvikler op bag dig?",
+            "Ihhh, dark mode. Mums!",
+            "På finsk hedder dark mode: 'Tumma Tila'. Det lyder lidt som en cocktail man fortryder.",
+            "På tysk hedder dark mode: 'Dunkelmodus'. Selvfølgelig gør det det.",
+            "D - A - R - K \u00a0\u00a0\u00a0 M - O - D - E\nA - C - T - I - V - A - T - E - D \u00a0\u00a0 !",
+            "På spansk hedder dark mode: 'Modo oscuro'. Det lyder lidt som en forbandelse fra Harry Potter, ik'?",
+            "På svensk hedder dark mode: 'Släck ljuset' - og de tror det er det samme som at slukke deres computer.",
+            "Ej, hvor er dark mode bare dejligt, var?",
+            "Er du tilfreds nu, Casper? Var det det her du ville have?",
+            "David Attenborough be like: \"And here we observe the developer... in its natural habitat... switching quietly... to Dark Mode.\"",
+            "Yoda be like: \"Dark Mode, you must enable. Yes, hmmm.\"",
+            "Morgan Freeman be like: \"And on that day... he turned on Dark Mode. And it was good.\"",
+            "Do you think Darth Vader calls it... khhhhh ...Daahhk Mode khhhhh ?",
+            "The french would be like: \"Ah, ze Daghk Meude, s'il vous plaît.\"",
+            "Owen Wilson be like: \"Wow. Wooow. Dark Mode.\"",
+            "Mike Tyson be like: \"I'm in Darth Mode. I mean... Dark Mode. Thame thing.\"",
+            "Tommy Wiseau be like: \"I did not use Light Mode, I did NAHT! Oh hi, Mark.\"",
+        ];
+
+        function randomSpeed() {
+            var s = 0.8 + Math.random() * 1.2;
+            return Math.random() < 0.5 ? s : -s;
+        }
+
+        function startDvd() {
+            active = true;
+            localStorage.setItem('dvdDark', '1');
+
+            var parrotIdx = 0;
+            parrotInterval = setInterval(function() {
+                if (parrotFrames.length > 0) {
+                    document.getElementById('favicon').href = parrotFrames[parrotIdx % parrotFrames.length];
+                    parrotIdx++;
+                }
+            }, 80);
+
+            var bannerText = '🌑  DARK  MODE  🌑              🌑  DARK  MODE  🌑              ';
+            var bannerWidth = 20;
+            var bannerPos = 0;
+            titleInterval = setInterval(function() {
+                var slice = bannerText.substring(bannerPos, bannerPos + bannerWidth);
+                if (slice.trim() === '') slice = '🌑';
+                document.title = slice;
+                bannerPos = (bannerPos + 1) % (bannerText.length / 2);
+            }, 150);
+
+            var content = document.getElementById('main-container');
+            if (!content) return;
+            var blocks = content.querySelectorAll(':scope > *:not(.hidden):not(.fixed)');
+            items = [];
+
+            // Capture positions BEFORE switching theme (to avoid reflow shift)
+            var rects = [];
+            blocks.forEach(function(el) {
+                rects.push(el.getBoundingClientRect());
+            });
+
+            // Now switch to dark mode
+            document.documentElement.classList.add('dark');
+            setToggleVisual(true);
+            document.body.style.overflow = 'hidden';
+
+            var winW = window.innerWidth;
+            var winH = window.innerHeight;
+
+            blocks.forEach(function(el, i) {
+                var rect = rects[i];
+                var x = rect.left;
+                var y = rect.top;
+                var w = rect.width;
+                var h = rect.height;
+
+                // Clamp within viewport so off-screen elements start at the edge
+                if (x < 0) x = 0;
+                if (x + w > winW) x = winW - w;
+                if (y < 0) y = 0;
+                if (y + h > winH) y = winH - h;
+
+                el._dvdOrig = el.getAttribute('style') || '';
+                el.style.position = 'fixed';
+                el.style.left = '0px';
+                el.style.top = '0px';
+                el.style.width = w + 'px';
+                el.style.zIndex = '40';
+                el.style.transition = 'none';
+                el.style.willChange = 'transform';
+                el.style.contain = 'layout style paint';
+                el.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+                el.style.outline = '3px solid ' + bounceColors[i % bounceColors.length];
+                el.style.outlineOffset = '-1px';
+                el.style.borderRadius = '8px';
+
+                items.push({
+                    el: el,
+                    x: x,
+                    y: y,
+                    w: w,
+                    h: h,
+                    vx: randomSpeed(),
+                    vy: randomSpeed(),
+                    hueIdx: i % bounceColors.length,
+                });
+            });
+
+            // Create floating quote box
+            quoteBox = document.createElement('div');
+            quoteBox.className = 'bg-gray-800 text-white rounded-lg shadow-xl p-5 text-center font-medium';
+            quoteBox.style.cssText = 'position:fixed;left:0;top:0;z-index:50;width:320px;max-width:90vw;will-change:transform;transition:none;pointer-events:none;white-space:pre-line;';
+            var startX = Math.random() * (winW - 320);
+            var startY = Math.random() * (winH - 100);
+            quoteBox.style.transform = 'translate(' + startX + 'px,' + startY + 'px)';
+            quoteBox.textContent = quotes[Math.floor(Math.random() * quotes.length)];
+            document.body.appendChild(quoteBox);
+
+            var qRect = quoteBox.getBoundingClientRect();
+            items.push({
+                el: quoteBox,
+                x: startX,
+                y: startY,
+                w: qRect.width,
+                h: qRect.height,
+                vx: randomSpeed(),
+                vy: randomSpeed(),
+                hueIdx: 0,
+                isQuote: true,
+            });
+
+            quoteInterval = setInterval(function() {
+                if (quoteBox) quoteBox.textContent = quotes[Math.floor(Math.random() * quotes.length)];
+            }, 5000);
+
+            rafId = requestAnimationFrame(tick);
+        }
+
+        function tick() {
+            if (!active) return;
+            var winW = window.innerWidth;
+            var winH = window.innerHeight;
+
+            items.forEach(function(it) {
+                it.x += it.vx;
+                it.y += it.vy;
+
+                var bounced = false;
+                if (it.x <= 0) { it.x = 0; it.vx = Math.abs(it.vx); bounced = true; }
+                if (it.x + it.w >= winW) { it.x = winW - it.w; it.vx = -Math.abs(it.vx); bounced = true; }
+                if (it.y <= 0) { it.y = 0; it.vy = Math.abs(it.vy); bounced = true; }
+                if (it.y + it.h >= winH) { it.y = winH - it.h; it.vy = -Math.abs(it.vy); bounced = true; }
+
+                if (bounced) {
+                    it.hueIdx = (it.hueIdx + 1) % bounceColors.length;
+                    it.el.style.outlineColor = bounceColors[it.hueIdx];
+                }
+
+                it.el.style.transform = 'translate(' + it.x + 'px,' + it.y + 'px)';
+            });
+
+            rafId = requestAnimationFrame(tick);
+        }
+
+        function stopDvd() {
+            active = false;
+            localStorage.removeItem('dvdDark');
+            if (rafId) cancelAnimationFrame(rafId);
+            if (quoteInterval) { clearInterval(quoteInterval); quoteInterval = null; }
+            if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
+            document.title = origTitle;
+            if (parrotInterval) { clearInterval(parrotInterval); parrotInterval = null; }
+            document.getElementById('favicon').href = parrotStatic;
+
+            items.forEach(function(it) {
+                if (it.isQuote) {
+                    it.el.remove();
+                } else {
+                    it.el.setAttribute('style', it.el._dvdOrig || '');
+                }
+            });
+
+            quoteBox = null;
+            items = [];
+            document.body.style.overflow = '';
+
+            // Switch back to light mode
+            document.documentElement.classList.remove('dark');
+            setToggleVisual(false);
+        }
+
+        themeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (active) stopDvd(); else startDvd();
+        });
+
+        // Auto-start if dark/DVD was active before page load
+        if (localStorage.getItem('dvdDark') === '1') {
+            startDvd();
+        }
+    })();
+    </script>
+</body>
+</html>

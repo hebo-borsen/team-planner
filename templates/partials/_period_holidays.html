@@ -1,0 +1,85 @@
+{% if holidays %}
+<table class="w-full text-sm">
+    <thead>
+        <tr class="border-b border-gray-200 dark:border-gray-700">
+            <th class="text-left py-2 font-medium">Holiday</th>
+            <th class="text-left py-2 font-medium">Date</th>
+            <th class="text-left py-2 font-medium">Day</th>
+            <th class="text-center py-2 font-medium">Enabled</th>
+            <th class="w-10"></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for hid, hname, hdate, henabled in holidays %}
+        {% set past = hdate < today %}
+        <tr class="border-b border-gray-100 dark:border-gray-800
+                   {{ 'opacity-50' if not henabled else '' }}
+                   {{ 'text-gray-400 dark:text-gray-500' if past and henabled else '' }}">
+            <td class="py-2.5">
+                {{ hname }}
+                {% if past %}
+                <span class="ml-1 text-xs text-gray-400 dark:text-gray-500">(passed)</span>
+                {% endif %}
+            </td>
+            <td class="py-2.5">
+                <span class="date-display cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                      onclick="var i=this.nextElementSibling; this.classList.add('hidden'); i.classList.remove('hidden'); i.focus();">
+                    {{ hdate|fmtdate }}
+                </span>
+                <input type="date" name="holiday_date" value="{{ hdate.strftime('%Y-%m-%d') }}"
+                       hx-post="/settings/holidays/{{ hid }}/date"
+                       hx-target="#holiday-list" hx-swap="innerHTML"
+                       class="hidden px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm"
+                       onblur="if(!this.dataset.changed){this.classList.add('hidden'); this.previousElementSibling.classList.remove('hidden');}"
+                       onchange="this.dataset.changed='1';">
+            </td>
+            <td class="py-2.5 text-gray-600 dark:text-gray-400">{{ hdate.strftime('%A') }}</td>
+            <td class="py-2.5 text-center">
+                <button hx-post="/settings/holidays/{{ hid }}/toggle"
+                        hx-target="#holiday-list" hx-swap="innerHTML"
+                        class="w-10 h-6 rounded-full relative inline-flex items-center transition-colors
+                               {{ 'bg-blue-600' if henabled else 'bg-gray-300 dark:bg-gray-600' }}">
+                    <span class="w-4 h-4 rounded-full bg-white shadow transform transition-transform
+                                 {{ 'translate-x-5' if henabled else 'translate-x-1' }}"></span>
+                </button>
+            </td>
+            <td class="py-2.5 text-center">
+                <button hx-delete="/settings/holidays/{{ hid }}/delete"
+                        hx-target="#holiday-list" hx-swap="innerHTML"
+                        hx-confirm="Delete {{ hname }}?"
+                        class="text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                        title="Delete holiday">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="text-sm text-gray-500 dark:text-gray-400 py-4">No holidays found for this period.</p>
+{% endif %}
+
+{% if selected_period_id %}
+<form hx-post="/settings/holidays/add" hx-target="#holiday-list" hx-swap="innerHTML"
+      class="mt-4 flex flex-wrap items-end gap-3">
+    <input type="hidden" name="period_id" value="{{ selected_period_id }}">
+    <div>
+        <label class="block text-xs font-medium mb-1">Name</label>
+        <input type="text" name="name" required placeholder="Holiday name"
+               class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-48">
+    </div>
+    <div>
+        <label class="block text-xs font-medium mb-1">Date</label>
+        <input type="date" name="holiday_date" required
+               class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+    </div>
+    <button type="submit"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+        Add Holiday
+    </button>
+</form>
+{% endif %}

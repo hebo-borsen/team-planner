@@ -1,0 +1,27 @@
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+    {% for mid, mname, memoji, attending in responses %}
+    <div class="flex items-center justify-between px-3 py-2 rounded border border-gray-200 dark:border-gray-700 text-sm">
+        <span>{{ memoji }} {{ mname }}</span>
+        <div class="flex items-center space-x-1">
+            <button hx-post="/events/{{ event_id }}/rsvp"
+                    hx-target="#responses-{{ event_id }}"
+                    hx-swap="innerHTML"
+                    hx-vals='{"member_id": {{ mid }}, "action": "yes"}'
+                    class="px-2 py-0.5 rounded text-xs
+                        {{ 'bg-green-500 text-white' if attending == 1 or attending == true else 'bg-gray-100 dark:bg-gray-700 hover:bg-green-100 dark:hover:bg-green-900/30' }}"
+                    title="Attending">
+                Yes
+            </button>
+            <button hx-post="/events/{{ event_id }}/rsvp"
+                    hx-target="#responses-{{ event_id }}"
+                    hx-swap="innerHTML"
+                    hx-vals='{"member_id": {{ mid }}, "action": "no"}'
+                    class="px-2 py-0.5 rounded text-xs
+                        {{ 'bg-red-500 text-white' if attending == 0 or attending == false else 'bg-gray-100 dark:bg-gray-700 hover:bg-red-100 dark:hover:bg-red-900/30' }}"
+                    title="Not attending">
+                No
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>

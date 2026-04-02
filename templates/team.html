@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Manage Team Members</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-3">Add Team Member</h2>
+        <form method="post" action="/admin/team" class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium mb-1">Name</label>
+                <input type="text" name="name" required placeholder="e.g., John Doe"
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Emoji</label>
+                <select name="emoji"
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+                    {% for e in emoji_options %}
+                    <option value="{{ e }}">{{ e }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                Add Team Member
+            </button>
+        </form>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-3">Team Members</h2>
+        <div id="team-list">
+            {% include "partials/_team_list.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %}

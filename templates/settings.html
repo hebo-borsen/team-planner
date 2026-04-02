@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Settings</h1>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <h2 class="text-lg font-semibold mb-4">Public Holidays (Søgnehelligdage)</h2>
+
+    <div class="mb-4">
+        <label for="period-select" class="block text-sm font-medium mb-1">Holiday Period</label>
+        <select id="period-select" name="period_id"
+                hx-get="/settings/holidays" hx-target="#holiday-list" hx-swap="innerHTML"
+                class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-full max-w-xs">
+            {% for pid, plabel, pstart, pend in periods %}
+            <option value="{{ pid }}" {{ 'selected' if pid == selected_period_id else '' }}>
+                {{ plabel }} ({{ pstart|fmtdate }} – {{ pend|fmtdate }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div id="holiday-list">
+        {% include "partials/_period_holidays.html" %}
+    </div>
+</div>
+{% endblock %}

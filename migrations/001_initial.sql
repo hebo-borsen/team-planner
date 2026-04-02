@@ -42,3 +42,4 @@ CREATE TABLE IF NOT EXISTS event_responses (
     FOREIGN KEY (member_id) REFERENCES team_members(id) ON DELETE CASCADE,
     UNIQUE KEY unique_event_member (event_id, member_id)
 );
+

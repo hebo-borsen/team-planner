@@ -1,0 +1,536 @@
+{% extends "base.html" %}
+
+{% block content %}
+<script>
+(function() {
+    if (!window.location.search.includes('from=')) {
+        var saved = localStorage.getItem('calendarRange');
+        if (saved) {
+            try {
+                var r = JSON.parse(saved);
+                if (r.from && r.to) {
+                    window.location.replace('/?from=' + r.from + '&to=' + r.to);
+                    return;
+                }
+            } catch(e) {}
+        }
+    } else {
+        var params = new URLSearchParams(window.location.search);
+        var f = params.get('from'), t = params.get('to');
+        if (f && t) localStorage.setItem('calendarRange', JSON.stringify({from: f, to: t}));
+    }
+})();
+function saveCalRange(from, to) {
+    localStorage.setItem('calendarRange', JSON.stringify({from: from, to: to}));
+}
+</script>
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">Vacation Calendar</h1>
+    <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-1">
+            {% for p in presets %}
+            <a href="/?from={{ p.from }}&to={{ p.to }}"
+               onclick="saveCalRange('{{ p.from }}', '{{ p.to }}')"
+               class="px-3 py-1.5 text-xs font-medium rounded-lg
+                      {{ 'bg-blue-600 text-white' if p.active else 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' }}">
+                {{ p.label }}
+            </a>
+            {% endfor %}
+        </div>
+        <div class="flex items-center space-x-1">
+            <label for="cal-from" class="text-sm font-medium">From</label>
+            <input type="date" name="from" id="cal-from" value="{{ start_date.isoformat() }}"
+                   hx-get="/" hx-target="#calendar-grid" hx-include="#cal-to" hx-push-url="true"
+                   onchange="saveCalRange(this.value, document.getElementById('cal-to').value)"
+                   class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+        </div>
+        <div class="flex items-center space-x-1">
+            <label for="cal-to" class="text-sm font-medium">To</label>
+            <input type="date" name="to" id="cal-to" value="{{ end_date.isoformat() }}"
+                   hx-get="/" hx-target="#calendar-grid" hx-include="#cal-from" hx-push-url="true"
+                   onchange="saveCalRange(document.getElementById('cal-from').value, this.value)"
+                   class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+        </div>
+        <button id="fullwidth-toggle" onclick="toggleFullWidth()" title="Toggle full width"
+                class="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path id="fw-expand" stroke-linecap="round" stroke-linejoin="round"
+                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/>
+                <path id="fw-collapse" class="hidden" stroke-linecap="round" stroke-linejoin="round"
+                      d="M9 4v5H4M15 4v5h5M4 15h5v5M20 15h-5v5"/>
+            </svg>
+        </button>
+    </div>
+</div>
+<script>
+function toggleFullWidth() {
+    var el = document.getElementById('main-container');
+    var expand = document.getElementById('fw-expand');
+    var collapse = document.getElementById('fw-collapse');
+    var isWide = !el.classList.contains('max-w-7xl');
+    el.classList.toggle('max-w-7xl', isWide);
+    expand.classList.toggle('hidden', !isWide);
+    collapse.classList.toggle('hidden', isWide);
+    localStorage.setItem('calendarFullWidth', isWide ? '' : '1');
+}
+(function() {
+    if (localStorage.getItem('calendarFullWidth') === '1') {
+        var el = document.getElementById('main-container');
+        if (el) {
+            el.classList.remove('max-w-7xl');
+            document.getElementById('fw-expand').classList.add('hidden');
+            document.getElementById('fw-collapse').classList.remove('hidden');
+        }
+    }
+})();
+</script>
+
+<div id="calendar-grid">
+    {% include "partials/_calendar_grid.html" %}
+</div>
+
+<div class="flex items-center gap-3 mt-3 text-xs text-gray-500 dark:text-gray-400">
+    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-blue-500"></span> Approved</span>
+    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-amber-300 dark:bg-amber-600"></span> Pending</span>
+    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-blue-500 ring-2 ring-red-500 ring-inset"></span> Removal requested</span>
+</div>
+
+<div class="flex items-center justify-between mt-4">
+    <div class="text-sm text-gray-500 dark:text-gray-400">
+        {% if total_vacations > 0 %}
+        Total approved vacation days: <strong>{{ total_vacations }}</strong>
+        {% endif %}
+    </div>
+    <button onclick="document.getElementById('vacation-modal').classList.remove('hidden')"
+            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg text-sm">
+        + {{ 'Add Vacation' if is_admin else 'Request Vacation' }}
+    </button>
+</div>
+
+<!-- Holiday Period Summary (all users) -->
+{% if period_summary %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+    <h2 class="text-lg font-semibold mb-4">Holiday Period {{ period_label }}</h2>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Ends {{ period_end_date|fmtdate }} &middot; <strong>{{ period_summary.months_left }} month{{ 's' if period_summary.months_left != 1 else '' }} remaining</strong>
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ (vacation_summary.accrued - vacation_summary.used)|round(1) }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">Holiday days available as of <strong>{{ today|fmtdate }}</strong></div>
+            <div class="text-xs text-gray-400 dark:text-gray-500 space-y-0.5 border-t border-gray-200 dark:border-gray-600 pt-2">
+                <div class="flex justify-between"><span>Earned:</span> <span>{{ vacation_summary.accrued }}</span></div>
+                <div class="flex justify-between"><span>Used:</span> <span>{{ vacation_summary.used }}</span></div>
+                <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
+                    <span>Available:</span>
+                    <span>{{ vacation_summary.accrued }} &minus; {{ vacation_summary.used }} = <strong>{{ (vacation_summary.accrued - vacation_summary.used)|round(1) }}</strong></span>
+                </div>
+                <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
+                    <span>Earned calculation:</span>
+                    <span>{{ vacation_summary.base_days }} / 12 &times; {{ vacation_summary.months_elapsed }} = {{ vacation_summary.accrued }}</span>
+                </div>
+                <div class="flex justify-between"><span>Accrual start:</span> <span>{{ vacation_summary.accrual_start|fmtdate }}</span></div>
+                {% if vacation_summary.base_days != vacation_summary.days_off_per_year %}
+                <div class="flex justify-between"><span>Base days (before proration):</span> <span>{{ vacation_summary.base_days }}</span></div>
+                {% endif %}
+            </div>
+        </div>
+        {% if period_summary.pending > 0 %}
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            <div class="text-2xl font-bold text-amber-500">{{ period_summary.pending }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Pending</div>
+        </div>
+        {% endif %}
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            <div class="text-sm text-gray-600 dark:text-gray-300 space-y-1.5">
+                <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">Remaining holiday days in period:</span>
+                    <span class="font-semibold">{{ period_summary.remaining }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">Months remaining in holiday period:</span>
+                    <span class="font-semibold">{{ period_summary.months_left }}</span>
+                </div>
+                <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1.5">
+                    <span class="text-gray-500 dark:text-gray-400">Avg days/month needed:</span>
+                    <span class="font-bold {{ 'text-red-600 dark:text-red-400' if period_summary.avg_per_month > 5.5 else '' }}">{{ period_summary.avg_per_month }}</span>
+                </div>
+            </div>
+            <div class="text-xs text-gray-400 dark:text-gray-500 mt-2">To avoid backloading all your holiday days.</div>
+        </div>
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ period_summary.used }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Days used</div>
+        </div>
+    </div>
+    <p class="text-xs text-gray-400 dark:text-gray-500 mt-3">Earned days are recalculated monthly. If your start date is after the period start, accrual begins from your start date.</p>
+</div>
+{% endif %}
+
+<!-- Admin: All Users Overview -->
+{% if is_admin and admin_summaries %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+    <h2 class="text-lg font-semibold mb-4">Team Overview &mdash; {{ period_label }}</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm" id="admin-holiday-table">
+            <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700 cursor-pointer select-none">
+                    <th class="text-left py-2 font-medium" onclick="sortTable(0)">Name <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(1)">Entitlement <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(2)">Used <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(3)">Pending <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(4)">Remaining <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(5)">Avg/month needed <span class="sort-icon text-gray-400">&#8597;</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for uid, display_name, entitlement, used, pending in admin_summaries %}
+                {% set remaining = entitlement - (used|float) %}
+                <tr class="border-b border-gray-100 dark:border-gray-800">
+                    <td class="py-2.5">{{ display_name }}</td>
+                    <td class="py-2.5 text-right">{{ entitlement }}</td>
+                    <td class="py-2.5 text-right">{{ used }}</td>
+                    <td class="py-2.5 text-right">{{ pending if pending > 0 else '' }}</td>
+                    <td class="py-2.5 text-right font-medium">
+                        {{ remaining }}
+                    </td>
+                    <td class="py-2.5 text-right">
+                        {% if period_summary and period_summary.months_left > 0 %}
+                        {% set avg = (remaining / period_summary.months_left)|round(1) %}
+                        <span class="{{ 'text-red-600 dark:text-red-400 font-medium' if avg > 5.5 else '' }}">{{ avg }}</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="text-xs text-gray-400 dark:text-gray-500 mt-3 text-right"><span class="text-red-600 dark:text-red-400 font-medium">Red</span> = avg/month needed exceeds 5.5 (risk of backloading).</p>
+</div>
+
+<script>
+(function() {
+    let sortCol = -1, sortAsc = true;
+    window.sortTable = function(col) {
+        const table = document.getElementById('admin-holiday-table');
+        const tbody = table.tBodies[0];
+        const rows = Array.from(tbody.rows);
+        if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = true; }
+        rows.sort(function(a, b) {
+            let av = a.cells[col].textContent.trim();
+            let bv = b.cells[col].textContent.trim();
+            let an = parseFloat(av), bn = parseFloat(bv);
+            if (!isNaN(an) && !isNaN(bn)) return sortAsc ? an - bn : bn - an;
+            if (av === '' && bv !== '') return 1;
+            if (bv === '' && av !== '') return -1;
+            return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+        rows.forEach(function(r) { tbody.appendChild(r); });
+        table.querySelectorAll('.sort-icon').forEach(function(el, i) {
+            el.textContent = i === col ? (sortAsc ? '\u25B2' : '\u25BC') : '\u2195';
+        });
+    };
+})();
+</script>
+{% endif %}
+
+<!-- Calendar day selection -->
+<script>
+(function() {
+    var startDate = null, endDate = null, dragRow = null, dragUid = null, dragging = false;
+    var dragMode = null; // 'empty', 'vacation', or 'pending'
+    var isAdmin = {{ 'true' if is_admin else 'false' }};
+    var SKIP_TYPES = {weekend: 1, holiday: 1};
+
+    function clearSelection() {
+        document.querySelectorAll('.cal-cell.ring-2').forEach(function(el) {
+            el.classList.remove('ring-2', 'ring-blue-500', 'ring-red-500', 'ring-amber-500', 'ring-inset');
+        });
+    }
+
+    function getEffectiveType(type) {
+        if (type in SKIP_TYPES) return 'skip';
+        if (type === 'pending') return isAdmin ? 'pending' : 'empty';
+        if (type === 'vacation' || type === 'removal') return 'vacation';
+        return 'empty';
+    }
+
+    function getAllowedEnd(row, from, to) {
+        var cells = Array.from(row.querySelectorAll('.cal-cell'));
+        var forward = from <= to;
+        var lastGood = from;
+
+        if (forward) {
+            for (var i = 0; i < cells.length; i++) {
+                var d = cells[i].dataset.date;
+                if (d <= from) continue;
+                if (d > to) break;
+                var t = getEffectiveType(cells[i].dataset.type);
+                if (t === 'skip') { lastGood = d; continue; }
+                if (t !== dragMode) break;
+                lastGood = d;
+            }
+        } else {
+            for (var i = cells.length - 1; i >= 0; i--) {
+                var d = cells[i].dataset.date;
+                if (d >= from) continue;
+                if (d < to) break;
+                var t = getEffectiveType(cells[i].dataset.type);
+                if (t === 'skip') { lastGood = d; continue; }
+                if (t !== dragMode) break;
+                lastGood = d;
+            }
+        }
+        return lastGood;
+    }
+
+    function highlightRange(row, from, to) {
+        clearSelection();
+        var a = from < to ? from : to;
+        var b = from < to ? to : from;
+        var ringColor = dragMode === 'vacation' ? 'ring-red-500' : (dragMode === 'pending' ? 'ring-amber-500' : 'ring-blue-500');
+        row.querySelectorAll('.cal-cell').forEach(function(el) {
+            var d = el.dataset.date;
+            if (d >= a && d <= b) {
+                el.classList.add('ring-2', ringColor, 'ring-inset');
+            }
+        });
+    }
+
+    function getUserDisplay(row) {
+        var nameCell = row.querySelector('td');
+        return nameCell ? nameCell.textContent.trim() : '';
+    }
+
+    function countCellsOfTypes(row, from, to, types) {
+        var a = from < to ? from : to;
+        var b = from < to ? to : from;
+        var count = 0;
+        row.querySelectorAll('.cal-cell').forEach(function(el) {
+            var d = el.dataset.date;
+            if (d >= a && d <= b && el.dataset.type in types) count++;
+        });
+        return count;
+    }
+
+    function openAddModal(from, to, uid) {
+        var a = from < to ? from : to;
+        var b = from < to ? to : from;
+        var startInput = document.querySelector('#vacation-modal input[name="vacation_date"]');
+        var endInput = document.querySelector('#vacation-modal input[name="end_date"]');
+        var userSelect = document.querySelector('#vacation-modal select[name="user_id"]');
+        if (startInput) startInput.value = a;
+        if (endInput) endInput.value = b;
+        if (userSelect && uid) userSelect.value = uid;
+        document.getElementById('vacation-modal').classList.remove('hidden');
+    }
+
+    function openRemoveModal(from, to, uid, row) {
+        var a = from < to ? from : to;
+        var b = from < to ? to : from;
+        var display = getUserDisplay(row);
+        var count = countCellsOfTypes(row, from, to, {vacation: 1, removal: 1});
+        document.getElementById('rm-user-name').textContent = display;
+        document.getElementById('rm-date-range').textContent =
+            count === 1 ? a : a + ' to ' + b;
+        document.getElementById('rm-day-count').textContent =
+            count + ' day' + (count !== 1 ? 's' : '');
+        document.querySelector('#remove-modal input[name="user_id"]').value = uid;
+        document.querySelector('#remove-modal input[name="start_date"]').value = a;
+        document.querySelector('#remove-modal input[name="end_date"]').value = b;
+        document.getElementById('remove-modal').classList.remove('hidden');
+    }
+
+    function openApproveModal(from, to, uid, row) {
+        var a = from < to ? from : to;
+        var b = from < to ? to : from;
+        var display = getUserDisplay(row);
+        var count = countCellsOfTypes(row, from, to, {pending: 1});
+        document.getElementById('ap-user-name').textContent = display;
+        document.getElementById('ap-date-range').textContent =
+            count === 1 ? a : a + ' to ' + b;
+        document.getElementById('ap-day-count').textContent =
+            count + ' day' + (count !== 1 ? 's' : '');
+        document.querySelectorAll('.ap-form input[name="user_id"]').forEach(function(el) { el.value = uid; });
+        document.querySelectorAll('.ap-form input[name="start_date"]').forEach(function(el) { el.value = a; });
+        document.querySelectorAll('.ap-form input[name="end_date"]').forEach(function(el) { el.value = b; });
+        document.getElementById('approve-modal').classList.remove('hidden');
+    }
+
+    document.addEventListener('mousedown', function(e) {
+        var cell = e.target.closest('.cal-cell');
+        if (!cell) return;
+        var row = cell.closest('.cal-row');
+        if (!row) return;
+        e.preventDefault();
+        var cellType = getEffectiveType(cell.dataset.type);
+        if (cellType === 'skip') return;
+        dragging = true;
+        dragRow = row;
+        dragUid = row.dataset.uid;
+        dragMode = cellType;
+        startDate = cell.dataset.date;
+        endDate = startDate;
+        highlightRange(dragRow, startDate, endDate);
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!dragging) return;
+        var cell = e.target.closest('.cal-cell');
+        if (cell && cell.closest('.cal-row') === dragRow && cell.dataset.date) {
+            var constrained = getAllowedEnd(dragRow, startDate, cell.dataset.date);
+            endDate = constrained;
+            highlightRange(dragRow, startDate, endDate);
+        }
+    });
+
+    document.addEventListener('mouseup', function() {
+        if (!dragging) return;
+        dragging = false;
+        if (startDate) {
+            if (dragMode === 'pending') {
+                openApproveModal(startDate, endDate, dragUid, dragRow);
+            } else if (dragMode === 'vacation') {
+                openRemoveModal(startDate, endDate, dragUid, dragRow);
+            } else {
+                openAddModal(startDate, endDate, dragUid);
+            }
+        }
+        setTimeout(clearSelection, 200);
+        dragRow = null;
+        dragMode = null;
+    });
+})();
+</script>
+
+<!-- Add Vacation Modal -->
+<div id="vacation-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">{{ 'Add Vacation' if is_admin else 'Request Vacation' }}</h2>
+            <button onclick="document.getElementById('vacation-modal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+        </div>
+        <form method="post" action="/vacations" class="space-y-4">
+            {% if is_admin %}
+            <div>
+                <label class="block text-sm font-medium mb-1">User</label>
+                <select name="user_id" required
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+                    <option value="">Select user...</option>
+                    {% for uid, uname, udisplay_name, uinitials, ufont in users %}
+                    <option value="{{ uid }}">{{ udisplay_name or uname }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% else %}
+            <input type="hidden" name="user_id" value="{{ user_id }}">
+            {% endif %}
+            <div>
+                <label class="block text-sm font-medium mb-1">Start Date</label>
+                <input type="date" name="vacation_date" required
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">End Date</label>
+                <input type="date" name="end_date"
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button type="button" onclick="document.getElementById('vacation-modal').classList.add('hidden')"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                    {{ 'Add Vacation' if is_admin else 'Request Vacation' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Remove Vacation Modal -->
+<div id="remove-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">{{ 'Delete Vacation' if is_admin else 'Request Vacation Removal' }}</h2>
+            <button onclick="document.getElementById('remove-modal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+        </div>
+        <div class="mb-4 space-y-2 text-sm">
+            <p><span class="text-gray-500 dark:text-gray-400">User:</span> <strong id="rm-user-name"></strong></p>
+            <p><span class="text-gray-500 dark:text-gray-400">Period:</span> <span id="rm-date-range"></span></p>
+            <p><span class="text-gray-500 dark:text-gray-400">Vacation days:</span> <span id="rm-day-count"></span></p>
+        </div>
+        {% if is_admin %}
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">This will permanently delete the selected vacation days.</p>
+        {% else %}
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">This will send a removal request to your admin for approval.</p>
+        {% endif %}
+        <form method="post" action="/vacations/remove-by-dates">
+            <input type="hidden" name="user_id" value="">
+            <input type="hidden" name="start_date" value="">
+            <input type="hidden" name="end_date" value="">
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="document.getElementById('remove-modal').classList.add('hidden')"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg">
+                    {{ 'Delete Vacation' if is_admin else 'Request Removal' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<!-- Approve Vacation Modal (admin only) -->
+{% if is_admin %}
+<div id="approve-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+     onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">Approve Vacation Request</h2>
+            <button onclick="document.getElementById('approve-modal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+        </div>
+        <div class="mb-4 space-y-2 text-sm">
+            <p><span class="text-gray-500 dark:text-gray-400">User:</span> <strong id="ap-user-name"></strong></p>
+            <p><span class="text-gray-500 dark:text-gray-400">Period:</span> <span id="ap-date-range"></span></p>
+            <p><span class="text-gray-500 dark:text-gray-400">Vacation days:</span> <span id="ap-day-count"></span></p>
+        </div>
+        <div class="flex justify-end space-x-2">
+            <button type="button" onclick="document.getElementById('approve-modal').classList.add('hidden')"
+                    class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
+                Cancel
+            </button>
+            <form method="post" action="/vacations/approve-by-dates" class="inline ap-form">
+                <input type="hidden" name="user_id" value="">
+                <input type="hidden" name="start_date" value="">
+                <input type="hidden" name="end_date" value="">
+                <input type="hidden" name="action" value="reject">
+                <button type="submit"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg">
+                    Reject
+                </button>
+            </form>
+            <form method="post" action="/vacations/approve-by-dates" class="inline ap-form">
+                <input type="hidden" name="user_id" value="">
+                <input type="hidden" name="start_date" value="">
+                <input type="hidden" name="end_date" value="">
+                <input type="hidden" name="action" value="approve">
+                <button type="submit"
+                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg">
+                    Approve
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
