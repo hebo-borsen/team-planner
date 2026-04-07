@@ -67,6 +67,9 @@
 <form hx-post="/settings/holidays/add" hx-target="#holiday-list" hx-swap="innerHTML"
       class="mt-4 flex flex-wrap items-end gap-3">
     <input type="hidden" name="period_id" value="{{ selected_period_id }}">
+    {% if holiday_dept_id is not none %}
+    <input type="hidden" name="department_id" value="{{ holiday_dept_id }}">
+    {% endif %}
     <div>
         <label class="block text-xs font-medium mb-1">Name</label>
         <input type="text" name="name" required placeholder="Holiday name"

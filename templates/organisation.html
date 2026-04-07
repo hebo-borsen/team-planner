@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Organisation</h1>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <h2 class="text-lg font-semibold mb-4">Departments</h2>
+
+    <form method="post" action="/departments" class="flex items-end gap-3 mb-4">
+        <div>
+            <label class="block text-xs font-medium mb-1">Department Name</label>
+            <input type="text" name="name" required placeholder="e.g. Development"
+                   class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-64">
+        </div>
+        <button type="submit"
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+            Add Department
+        </button>
+    </form>
+
+    <div id="department-list">
+        {% include "partials/_department_list.html" %}
+    </div>
+</div>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+    <h2 class="text-lg font-semibold mb-4">Default Public Holidays (Søgnehelligdage)</h2>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        These are the default holidays. When a new department is created, it receives a copy of these.
+        Each department can then customise their own holidays in Settings.
+    </p>
+
+    <div class="mb-4">
+        <label for="org-period-select" class="block text-sm font-medium mb-1">Holiday Period</label>
+        <select id="org-period-select" name="period_id"
+                hx-get="/organisation/holidays" hx-target="#holiday-list" hx-swap="innerHTML"
+                class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-full max-w-xs">
+            {% for pid, plabel, pstart, pend in periods %}
+            <option value="{{ pid }}" {{ 'selected' if pid == selected_period_id else '' }}>
+                {{ plabel }} ({{ pstart|fmtdate }} – {{ pend|fmtdate }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div id="holiday-list">
+        {% include "partials/_period_holidays.html" %}
+    </div>
+</div>
+{% endblock %}

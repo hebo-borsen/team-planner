@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Settings</h1>
+<h1 class="text-2xl font-bold mb-6">Settings{% if nav_current_dept_name %} &mdash; {{ nav_current_dept_name }}{% endif %}</h1>
 
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
     <h2 class="text-lg font-semibold mb-4">Public Holidays (Søgnehelligdage)</h2>
@@ -9,7 +9,7 @@
     <div class="mb-4">
         <label for="period-select" class="block text-sm font-medium mb-1">Holiday Period</label>
         <select id="period-select" name="period_id"
-                hx-get="/settings/holidays" hx-target="#holiday-list" hx-swap="innerHTML"
+                hx-get="/settings/holidays?department_id={{ holiday_dept_id or '' }}" hx-target="#holiday-list" hx-swap="innerHTML"
                 class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-full max-w-xs">
             {% for pid, plabel, pstart, pend in periods %}
             <option value="{{ pid }}" {{ 'selected' if pid == selected_period_id else '' }}>
@@ -21,26 +21,6 @@
 
     <div id="holiday-list">
         {% include "partials/_period_holidays.html" %}
-    </div>
-</div>
-
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
-    <h2 class="text-lg font-semibold mb-4">Departments</h2>
-
-    <form method="post" action="/departments" class="flex items-end gap-3 mb-4">
-        <div>
-            <label class="block text-xs font-medium mb-1">Department Name</label>
-            <input type="text" name="name" required placeholder="e.g. Development"
-                   class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-64">
-        </div>
-        <button type="submit"
-                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
-            Add Department
-        </button>
-    </form>
-
-    <div id="department-list">
-        {% include "partials/_department_list.html" %}
     </div>
 </div>
 
@@ -65,18 +45,7 @@
                 <input type="date" name="end_date" id="rr-end" required min="{{ today.isoformat() }}"
                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
-            {% if departments %}
-            <div>
-                <label class="block text-xs font-medium mb-1">Department</label>
-                <select name="department_id"
-                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
-                    <option value="">All departments</option>
-                    {% for did, dname, dsort in departments %}
-                    <option value="{{ did }}">{{ dname }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            {% endif %}
+            <input type="hidden" name="department_id" value="{{ holiday_dept_id }}">
             <div>
                 <label class="block text-xs font-medium mb-1">Color</label>
                 <div class="flex items-center gap-1.5">
