@@ -23,4 +23,99 @@
         {% include "partials/_period_holidays.html" %}
     </div>
 </div>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+    <h2 class="text-lg font-semibold mb-4">Departments</h2>
+
+    <form method="post" action="/departments" class="flex items-end gap-3 mb-4">
+        <div>
+            <label class="block text-xs font-medium mb-1">Department Name</label>
+            <input type="text" name="name" required placeholder="e.g. Development"
+                   class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-64">
+        </div>
+        <button type="submit"
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+            Add Department
+        </button>
+    </form>
+
+    <div id="department-list">
+        {% include "partials/_department_list.html" %}
+    </div>
+</div>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+    <h2 class="text-lg font-semibold mb-4">Review Requests</h2>
+
+    <form method="post" action="/review-requests" class="mb-6" id="rr-form">
+        <div class="flex flex-wrap items-end gap-3">
+            <div>
+                <label class="block text-xs font-medium mb-1">Title</label>
+                <input type="text" name="title" required placeholder="e.g. Q2 2026 Holiday Review"
+                       class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-64">
+            </div>
+            <div>
+                <label class="block text-xs font-medium mb-1">Start Date</label>
+                <input type="date" name="start_date" id="rr-start" required min="{{ today.isoformat() }}"
+                       onchange="document.getElementById('rr-end').min = this.value"
+                       class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium mb-1">End Date</label>
+                <input type="date" name="end_date" id="rr-end" required min="{{ today.isoformat() }}"
+                       class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            {% if departments %}
+            <div>
+                <label class="block text-xs font-medium mb-1">Department</label>
+                <select name="department_id"
+                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+                    <option value="">All departments</option>
+                    {% for did, dname, dsort in departments %}
+                    <option value="{{ did }}">{{ dname }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div>
+                <label class="block text-xs font-medium mb-1">Color</label>
+                <div class="flex items-center gap-1.5">
+                    <input type="hidden" name="color" id="rr-color" value="#f59e0b">
+                    {% set default_colors = ['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6'] %}
+                    {% for c in default_colors %}
+                    <button type="button" onclick="selectRRColor('{{ c }}')"
+                            class="w-7 h-7 rounded-full border-2 transition-all rr-color-btn {{ 'border-gray-900 dark:border-white scale-110' if c == '#f59e0b' else 'border-transparent hover:border-gray-400' }}"
+                            style="background:{{ c }}" data-color="{{ c }}"></button>
+                    {% endfor %}
+                    <input type="color" id="rr-custom-color" value="#f59e0b"
+                           onchange="selectRRColor(this.value)"
+                           class="w-7 h-7 rounded-full cursor-pointer border-2 border-transparent hover:border-gray-400"
+                           title="Custom color">
+                </div>
+            </div>
+            <button type="submit"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                Create Request
+            </button>
+        </div>
+    </form>
+    <script>
+    function selectRRColor(color) {
+        document.getElementById('rr-color').value = color;
+        document.querySelectorAll('.rr-color-btn').forEach(function(btn) {
+            if (btn.dataset.color === color) {
+                btn.classList.add('border-gray-900', 'dark:border-white', 'scale-110');
+                btn.classList.remove('border-transparent');
+            } else {
+                btn.classList.remove('border-gray-900', 'dark:border-white', 'scale-110');
+                btn.classList.add('border-transparent');
+            }
+        });
+    }
+    </script>
+
+    <div id="review-requests-list">
+        {% include "partials/_review_requests_admin.html" %}
+    </div>
+</div>
 {% endblock %}

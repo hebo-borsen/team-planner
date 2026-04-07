@@ -5,7 +5,7 @@
     <h1 class="text-2xl font-bold">My Vacations</h1>
     <button onclick="document.getElementById('request-modal').classList.remove('hidden')"
             class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg text-sm">
-        + Request Vacation
+        + Add Vacation
     </button>
 </div>
 
@@ -15,19 +15,6 @@
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
         <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 flex-wrap">
-                {% if g.status == 'approved' %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
-                    Approved
-                </span>
-                {% elif g.status == 'pending' %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
-                    Pending approval
-                </span>
-                {% elif g.status == 'pending_removal' %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
-                    Removal pending
-                </span>
-                {% endif %}
                 <span class="text-sm text-gray-500 dark:text-gray-400">
                     {% if g.count == 1 %}
                         {{ g.start_date|fmtdate }}
@@ -39,29 +26,15 @@
                 </span>
             </div>
             <div class="inline-flex gap-2 shrink-0">
-                {% if g.status == 'pending' %}
-                <form method="post" action="/vacations/bulk-cancel" class="inline">
-                    {% for vid in g.ids %}
-                    <input type="hidden" name="ids" value="{{ vid }}">
-                    {% endfor %}
-                    <button type="submit"
-                            class="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded">
-                        Cancel{% if g.count > 1 %} ({{ g.count }} days){% endif %}
-                    </button>
-                </form>
-                {% elif g.status == 'approved' %}
                 <form method="post" action="/vacations/bulk-removal" class="inline">
                     {% for vid in g.ids %}
                     <input type="hidden" name="ids" value="{{ vid }}">
                     {% endfor %}
                     <button type="submit"
                             class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded">
-                        {{ 'Delete' if is_admin else 'Request Removal' }}{% if g.count > 1 %} ({{ g.count }} days){% endif %}
+                        Delete{% if g.count > 1 %} ({{ g.count }} days){% endif %}
                     </button>
                 </form>
-                {% elif g.status == 'pending_removal' %}
-                <span class="text-xs text-gray-400">Awaiting approval...</span>
-                {% endif %}
             </div>
         </div>
 
@@ -93,13 +66,7 @@
                         {% set is_weekend = dow >= 5 %}
                         <td class="px-1.5 py-1 text-center rounded
                             {% if is_requested %}
-                                {% if g.status == 'approved' %}
-                                    bg-green-400 dark:bg-green-600 text-white font-semibold
-                                {% elif g.status == 'pending' %}
-                                    bg-amber-400 dark:bg-amber-600 text-white font-semibold
-                                {% elif g.status == 'pending_removal' %}
-                                    bg-red-400 dark:bg-red-600 text-white font-semibold
-                                {% endif %}
+                                bg-blue-400 dark:bg-blue-600 text-white font-semibold
                             {% elif is_holiday %}
                                 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400
                             {% elif is_weekend %}
@@ -124,12 +91,39 @@
 </div>
 {% endif %}
 
-<!-- Request Vacation Modal -->
+{% if signed_reviews %}
+<div class="mt-8">
+    <h2 class="text-lg font-semibold mb-3">Signed-off Review Periods</h2>
+    <div class="space-y-3">
+        {% for rr_id, rr_title, rr_start, rr_end, rr_color, rr_decided_at in signed_reviews %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden border-l-4" style="border-left-color:{{ rr_color }}">
+            <div class="px-4 py-3 flex items-center justify-between gap-4">
+                <div>
+                    <div class="text-sm font-medium">{{ rr_title }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                        {{ rr_start|fmtdate }} &ndash; {{ rr_end|fmtdate }}
+                        &middot; Signed off {{ rr_decided_at|fmtdatetime }}
+                    </div>
+                </div>
+                <form method="post" action="/review-requests/{{ rr_id }}/undo-sign-off" class="inline">
+                    <button type="submit"
+                            class="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        Undo Sign-off
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Add Vacation Modal -->
 <div id="request-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50"
      onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">Request Vacation</h2>
+            <h2 class="text-lg font-semibold">Add Vacation</h2>
             <button onclick="document.getElementById('request-modal').classList.add('hidden')"
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
         </div>
@@ -154,7 +148,7 @@
                 </button>
                 <button type="submit"
                         class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
-                    Request Vacation
+                    Add Vacation
                 </button>
             </div>
         </form>

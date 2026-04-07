@@ -35,15 +35,6 @@
                        class="px-3 py-1.5 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'my_vacations' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                         My Vacations
                     </a>
-                    {% if is_admin %}
-                    <a href="/approvals"
-                       class="px-3 py-1.5 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'approvals' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
-                        Approvals
-                        {% if pending_count %}
-                        <span class="ml-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ pending_count }}</span>
-                        {% endif %}
-                    </a>
-                    {% endif %}
                     {% endif %}
                 </div>
 
@@ -53,6 +44,11 @@
                             class="inline-flex items-center gap-0.5 px-1.5 py-1 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 select-none cursor-pointer">
                         <span class="theme-sun px-1 rounded {{ 'bg-amber-200 dark:bg-transparent' }}">☀</span>
                         <span class="theme-moon px-1 rounded {{ 'bg-transparent dark:bg-indigo-500 dark:text-white' }}">☾</span>
+                    </button>
+                    <button id="font-toggle" title="Toggle fun/boring mode"
+                            class="inline-flex items-center gap-0.5 px-1.5 py-1 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-700 select-none cursor-pointer">
+                        <span id="font-fun" class="px-0.5 rounded">🦄🌈🚀🎊</span>
+                        <span id="font-boring" class="px-1 rounded">😐</span>
                     </button>
                     {% if is_admin %}
                     <a href="/users"
@@ -127,6 +123,42 @@
             });
         }
     });
+    </script>
+
+    <!-- Fun/Boring mode: toggle custom fonts -->
+    <style>
+    .boring-mode [style*="font-family"] {
+        font-family: inherit !important;
+    }
+    </style>
+    <script>
+    (function() {
+        var btn = document.getElementById('font-toggle');
+        if (!btn) return;
+        var boringEl = document.getElementById('font-boring');
+        var funEl = document.getElementById('font-fun');
+        var boring = localStorage.getItem('boringMode') === '1';
+
+        function apply(isBoring) {
+            if (isBoring) {
+                document.body.classList.add('boring-mode');
+                boringEl.className = 'px-1 rounded bg-gray-300 dark:bg-gray-600';
+                funEl.className = 'px-1 rounded opacity-50';
+            } else {
+                document.body.classList.remove('boring-mode');
+                boringEl.className = 'px-1 rounded opacity-50';
+                funEl.className = 'px-1 rounded bg-amber-200 dark:bg-amber-700';
+            }
+        }
+
+        apply(boring);
+
+        btn.addEventListener('click', function() {
+            boring = !boring;
+            localStorage.setItem('boringMode', boring ? '1' : '');
+            apply(boring);
+        });
+    })();
     </script>
 
     <!-- DVD Mode Easter Egg: triggers when clicking the dark mode toggle -->
