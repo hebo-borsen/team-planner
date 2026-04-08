@@ -32,7 +32,7 @@ def authenticate_user(username, password):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, username, must_change_password, theme, role, initials, font FROM users WHERE username = %s AND password_hash = %s",
+        "SELECT id, username, must_change_password, theme, role, initials, font, email FROM users WHERE username = %s AND password_hash = %s",
         (username, hash_password(password))
     )
     user = cursor.fetchone()
@@ -47,7 +47,11 @@ def register_user(username, password, display_name=None, email=None, font=None, 
     try:
         cursor.execute("SELECT COUNT(*) FROM users")
         is_first = cursor.fetchone()[0] == 0
-        role = 'admin' if is_first else 'user'
+        is_pre_admin = False
+        if email and not is_first:
+            cursor.execute("SELECT COUNT(*) FROM pre_admins WHERE email = %s", (email.lower(),))
+            is_pre_admin = cursor.fetchone()[0] > 0
+        role = 'admin' if (is_first or is_pre_admin) else 'user'
         cursor.execute(
             "INSERT INTO users (username, password_hash, must_change_password, initials, display_name, email, font, role, department_id) VALUES (%s, %s, FALSE, %s, %s, %s, %s, %s, %s)",
             (username, hash_password(password), username, display_name, email, font, role, department_id)
@@ -121,7 +125,7 @@ def get_user_by_session_token(token):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, username, must_change_password, theme, role, initials, font FROM users WHERE session_token = %s",
+        "SELECT id, username, must_change_password, theme, role, initials, font, email FROM users WHERE session_token = %s",
         (token,)
     )
     user = cursor.fetchone()
@@ -902,34 +906,24 @@ def get_vacations_for_date_range(start_date, end_date):
     return vacations
 
 
-def get_all_enabled_holidays(department_id=None):
+def get_all_enabled_holidays():
     conn = get_db_connection()
     cursor = conn.cursor()
-    if department_id is not None:
-        cursor.execute("SELECT holiday_date FROM period_holidays WHERE enabled = TRUE AND department_id = %s", (department_id,))
-    else:
-        cursor.execute("SELECT holiday_date FROM period_holidays WHERE enabled = TRUE AND department_id IS NULL")
+    cursor.execute("SELECT holiday_date FROM period_holidays WHERE enabled = TRUE AND department_id IS NULL")
     holidays = {row[0] for row in cursor.fetchall()}
     cursor.close()
     conn.close()
     return holidays
 
 
-def get_holidays_for_date_range(start_date, end_date, department_id=None):
+def get_holidays_for_date_range(start_date, end_date):
     conn = get_db_connection()
     cursor = conn.cursor()
-    if department_id is not None:
-        cursor.execute("""
-            SELECT holiday_date, name, id FROM period_holidays
-            WHERE enabled = TRUE AND department_id = %s AND holiday_date BETWEEN %s AND %s
-            ORDER BY holiday_date
-        """, (department_id, start_date, end_date))
-    else:
-        cursor.execute("""
-            SELECT holiday_date, name, id FROM period_holidays
-            WHERE enabled = TRUE AND department_id IS NULL AND holiday_date BETWEEN %s AND %s
-            ORDER BY holiday_date
-        """, (start_date, end_date))
+    cursor.execute("""
+        SELECT holiday_date, name, id FROM period_holidays
+        WHERE enabled = TRUE AND department_id IS NULL AND holiday_date BETWEEN %s AND %s
+        ORDER BY holiday_date
+    """, (start_date, end_date))
     holidays = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -964,19 +958,13 @@ def get_current_period_id():
     return row[0] if row else None
 
 
-def get_period_holidays(period_id, department_id=None):
+def get_period_holidays(period_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    if department_id is not None:
-        cursor.execute("""
-            SELECT id, name, holiday_date, enabled FROM period_holidays
-            WHERE period_id = %s AND department_id = %s ORDER BY holiday_date
-        """, (period_id, department_id))
-    else:
-        cursor.execute("""
-            SELECT id, name, holiday_date, enabled FROM period_holidays
-            WHERE period_id = %s AND department_id IS NULL ORDER BY holiday_date
-        """, (period_id,))
+    cursor.execute("""
+        SELECT id, name, holiday_date, enabled FROM period_holidays
+        WHERE period_id = %s AND department_id IS NULL ORDER BY holiday_date
+    """, (period_id,))
     holidays = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -984,65 +972,82 @@ def get_period_holidays(period_id, department_id=None):
 
 
 def toggle_period_holiday(holiday_id):
-    """Toggle enabled/disabled. Returns (period_id, department_id)."""
+    """Toggle enabled/disabled. Returns period_id."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT period_id, enabled, department_id FROM period_holidays WHERE id = %s", (holiday_id,))
+    cursor.execute("SELECT period_id, enabled FROM period_holidays WHERE id = %s", (holiday_id,))
     row = cursor.fetchone()
     if row:
-        period_id, enabled, department_id = row
+        period_id, enabled = row
         cursor.execute("UPDATE period_holidays SET enabled = %s WHERE id = %s", (not enabled, holiday_id))
         conn.commit()
     else:
-        period_id, department_id = None, None
+        period_id = None
     cursor.close()
     conn.close()
-    return period_id, department_id
+    return period_id
+
+
+def update_period_holiday_name(holiday_id, new_name):
+    """Update holiday name. Returns period_id."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT period_id FROM period_holidays WHERE id = %s", (holiday_id,))
+    row = cursor.fetchone()
+    if row:
+        period_id = row[0]
+        cursor.execute("UPDATE period_holidays SET name = %s WHERE id = %s", (new_name, holiday_id))
+        conn.commit()
+    else:
+        period_id = None
+    cursor.close()
+    conn.close()
+    return period_id
 
 
 def update_period_holiday_date(holiday_id, new_date):
-    """Update holiday date. Returns (period_id, department_id)."""
+    """Update holiday date. Returns period_id."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT period_id, department_id FROM period_holidays WHERE id = %s", (holiday_id,))
+    cursor.execute("SELECT period_id FROM period_holidays WHERE id = %s", (holiday_id,))
     row = cursor.fetchone()
     if row:
-        period_id, department_id = row
+        period_id = row[0]
         cursor.execute("UPDATE period_holidays SET holiday_date = %s WHERE id = %s", (new_date, holiday_id))
         conn.commit()
     else:
-        period_id, department_id = None, None
+        period_id = None
     cursor.close()
     conn.close()
-    return period_id, department_id
+    return period_id
 
 
-def add_period_holiday(period_id, name, holiday_date, department_id=None):
+def add_period_holiday(period_id, name, holiday_date):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO period_holidays (period_id, name, holiday_date, enabled, department_id) VALUES (%s, %s, %s, TRUE, %s)",
-        (period_id, name, holiday_date, department_id))
+        "INSERT INTO period_holidays (period_id, name, holiday_date, enabled, department_id) VALUES (%s, %s, %s, TRUE, NULL)",
+        (period_id, name, holiday_date))
     conn.commit()
     cursor.close()
     conn.close()
 
 
 def delete_period_holiday(holiday_id):
-    """Delete a holiday. Returns (period_id, department_id)."""
+    """Delete a holiday. Returns period_id."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT period_id, department_id FROM period_holidays WHERE id = %s", (holiday_id,))
+    cursor.execute("SELECT period_id FROM period_holidays WHERE id = %s", (holiday_id,))
     row = cursor.fetchone()
     if row:
-        period_id, department_id = row
+        period_id = row[0]
         cursor.execute("DELETE FROM period_holidays WHERE id = %s", (holiday_id,))
         conn.commit()
     else:
-        period_id, department_id = None, None
+        period_id = None
     cursor.close()
     conn.close()
-    return period_id, department_id
+    return period_id
 
 
 def get_event_responses(event_id):
@@ -1306,13 +1311,6 @@ def create_department(name):
     cursor = conn.cursor()
     try:
         cursor.execute("INSERT INTO departments (name) VALUES (%s)", (name,))
-        dept_id = cursor.lastrowid
-        # Copy default holidays (department_id IS NULL) into the new department
-        cursor.execute("""
-            INSERT INTO period_holidays (period_id, name, holiday_date, enabled, department_id)
-            SELECT period_id, name, holiday_date, enabled, %s
-            FROM period_holidays WHERE department_id IS NULL
-        """, (dept_id,))
         conn.commit()
         return True, "Department created."
     except mysql.connector.IntegrityError:
@@ -1410,6 +1408,29 @@ def delete_user(user_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def get_pre_admin_emails():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT email FROM pre_admins ORDER BY email")
+    emails = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return emails
+
+
+def set_pre_admin_emails(emails):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM pre_admins")
+    for email in emails:
+        email = email.strip().lower()
+        if email:
+            cursor.execute("INSERT IGNORE INTO pre_admins (email) VALUES (%s)", (email,))
     conn.commit()
     cursor.close()
     conn.close()

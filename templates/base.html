@@ -57,7 +57,7 @@
                         <span class="block px-4 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/30">For: {{ nav_current_dept_name or 'Department' }}</span>
                         <a href="/settings"
                            class="block px-4 py-2 text-sm {{ 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-200 font-medium' if active_tab == 'settings' else 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
-                            Settings
+                            Review Requests
                         </a>
                         <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
                         <span class="block px-4 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/30">Global stuff</span>
@@ -221,7 +221,12 @@
                         <label class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
                             <input type="radio" name="dept" value="{{ did }}" {{ 'checked' if did == nav_current_dept_id else '' }}
                                    class="text-blue-600">
-                            <span class="text-sm">{{ dname }}</span>
+                            <span>
+                                <span class="text-sm">{{ dname }}</span>
+                                {% if did == session.get('department_id') %}
+                                <span class="block text-[10px] text-orange-500 dark:text-orange-400 leading-tight">Your department</span>
+                                {% endif %}
+                            </span>
                         </label>
                         {% endfor %}
                     </div>
@@ -503,29 +508,61 @@
 
             // Bouncing theme toggle + MC Hammer lyrics box
             var hammerBox = document.createElement('div');
-            hammerBox.className = 'rounded-xl shadow-2xl text-center';
-            hammerBox.style.cssText = 'position:fixed;left:0;top:0;z-index:60;width:280px;will-change:transform;transition:none;pointer-events:auto;overflow:hidden;';
-            var hammerToggle = document.createElement('div');
-            hammerToggle.className = 'bg-gray-700 px-4 py-3 flex items-center justify-center gap-2 cursor-pointer';
-            hammerToggle.innerHTML = '<span class="theme-sun px-1 rounded bg-transparent opacity-50">☀</span><span class="theme-moon px-1 rounded bg-indigo-500 text-white">☾</span>';
-            hammerBox.style.cursor = 'pointer';
+            hammerBox.style.cssText = 'position:fixed;left:0;top:0;z-index:60;width:280px;will-change:transform;transition:none;pointer-events:auto;cursor:pointer;';
             hammerBox.addEventListener('click', function(e) { e.stopPropagation(); stopDvd(); });
+            var hammerInner = document.createElement('div');
+            hammerInner.className = 'rounded-xl shadow-2xl text-center overflow-hidden';
+            var hammerShaker = document.createElement('div');
+            var hammerToggle = document.createElement('div');
+            hammerToggle.className = 'bg-gray-700 px-4 py-3 flex items-center justify-center gap-2';
+            hammerToggle.innerHTML = '<span class="theme-sun px-1 rounded bg-transparent opacity-50">☀</span><span class="theme-moon px-1 rounded bg-indigo-500 text-white">☾</span>';
             var hammerLyrics = document.createElement('div');
             hammerLyrics.className = 'bg-gray-900 text-amber-400 px-4 py-3 text-sm font-bold';
             hammerLyrics.style.cssText = 'min-height:3em;display:flex;align-items:center;justify-content:center;font-family:monospace;';
-            hammerBox.appendChild(hammerToggle);
-            hammerBox.appendChild(hammerLyrics);
+            hammerShaker.appendChild(hammerToggle);
+            hammerShaker.appendChild(hammerLyrics);
+            hammerInner.appendChild(hammerShaker);
+            hammerBox.appendChild(hammerInner);
             var hx = Math.random() * (winW - 280);
             var hy = Math.random() * (winH - 120);
             hammerBox.style.transform = 'translate(' + hx + 'px,' + hy + 'px)';
             document.body.appendChild(hammerBox);
 
-            // Pulse animation (subtle scale on toggle icons only, lyrics always visible)
+            // Pulse + barrel roll animations
             var pulseStyle = document.createElement('style');
             pulseStyle.id = 'hammer-pulse-style';
-            pulseStyle.textContent = '@keyframes hammerPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.4)}} .hammer-pulse{animation:hammerPulse 0.8s ease-in-out infinite}';
+            pulseStyle.textContent = '@keyframes hammerPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.4)}} .hammer-pulse{animation:hammerPulse 0.8s ease-in-out infinite} @keyframes hammerBarrel{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}} .hammer-barrel{animation:hammerBarrel 0.5s ease-in-out} @keyframes hammerShake{0%,100%{transform:translate(0,0) rotate(0deg)}10%{transform:translate(-12px,4px) rotate(-3deg)}20%{transform:translate(10px,-4px) rotate(2deg)}30%{transform:translate(-14px,-2px) rotate(-4deg)}40%{transform:translate(8px,6px) rotate(3deg)}50%{transform:translate(-6px,-8px) rotate(-2deg)}60%{transform:translate(14px,2px) rotate(4deg)}70%{transform:translate(-10px,6px) rotate(-3deg)}80%{transform:translate(12px,-4px) rotate(2deg)}90%{transform:translate(-8px,4px) rotate(-2deg)}} .hammer-shake{animation:hammerShake 0.4s ease-in-out infinite}';
             document.head.appendChild(pulseStyle);
             hammerToggle.classList.add('hammer-pulse');
+
+            // Random barrel rolls every 2-5 seconds
+            function scheduleBarrel() {
+                var delay = (2 + Math.floor(Math.random() * 4)) * 1000;
+                hammerBox._barrelTimeout = setTimeout(function() {
+                    if (!active) return;
+                    hammerInner.classList.add('hammer-barrel');
+                    hammerInner.addEventListener('animationend', function handler() {
+                        hammerInner.classList.remove('hammer-barrel');
+                        hammerInner.removeEventListener('animationend', handler);
+                    });
+                    scheduleBarrel();
+                }, delay);
+            }
+            scheduleBarrel();
+
+            // Random shakes every 2-5 seconds (independent of barrel rolls)
+            function scheduleShake() {
+                var delay = (2 + Math.floor(Math.random() * 4)) * 1000;
+                hammerBox._shakeTimeout = setTimeout(function() {
+                    if (!active) return;
+                    hammerShaker.classList.add('hammer-shake');
+                    setTimeout(function() {
+                        hammerShaker.classList.remove('hammer-shake');
+                    }, 600);
+                    scheduleShake();
+                }, delay);
+            }
+            scheduleShake();
 
             // Hide the original theme toggles in the secondary header
             if (themeBtn) themeBtn.style.display = 'none';
@@ -654,6 +691,8 @@
             items.forEach(function(it) {
                 if (it.isQuote || it.isHammer) {
                     if (it.el._lyricsInterval) clearInterval(it.el._lyricsInterval);
+                    if (it.el._barrelTimeout) clearTimeout(it.el._barrelTimeout);
+                    if (it.el._shakeTimeout) clearTimeout(it.el._shakeTimeout);
                     it.el.remove();
                 } else {
                     it.el.setAttribute('style', it.el._dvdOrig || '');

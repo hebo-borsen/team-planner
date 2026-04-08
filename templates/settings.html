@@ -1,30 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Settings{% if nav_current_dept_name %} &mdash; {{ nav_current_dept_name }}{% endif %}</h1>
+<h1 class="text-2xl font-bold mb-6">Review Requests{% if nav_current_dept_name %} &mdash; {{ nav_current_dept_name }}{% endif %}</h1>
 
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-    <h2 class="text-lg font-semibold mb-4">Public Holidays (Søgnehelligdage)</h2>
-
-    <div class="mb-4">
-        <label for="period-select" class="block text-sm font-medium mb-1">Holiday Period</label>
-        <select id="period-select" name="period_id"
-                hx-get="/settings/holidays?department_id={{ holiday_dept_id or '' }}" hx-target="#holiday-list" hx-swap="innerHTML"
-                class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-full max-w-xs">
-            {% for pid, plabel, pstart, pend in periods %}
-            <option value="{{ pid }}" {{ 'selected' if pid == selected_period_id else '' }}>
-                {{ plabel }} ({{ pstart|fmtdate }} – {{ pend|fmtdate }})
-            </option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <div id="holiday-list">
-        {% include "partials/_period_holidays.html" %}
-    </div>
-</div>
-
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
     <h2 class="text-lg font-semibold mb-4">Review Requests</h2>
 
     <form method="post" action="/review-requests" class="mb-6" id="rr-form">
@@ -45,7 +24,7 @@
                 <input type="date" name="end_date" id="rr-end" required min="{{ today.isoformat() }}"
                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
-            <input type="hidden" name="department_id" value="{{ holiday_dept_id }}">
+            <input type="hidden" name="department_id" value="{{ nav_current_dept_id }}">
             <div>
                 <label class="block text-xs font-medium mb-1">Color</label>
                 <div class="flex items-center gap-1.5">
