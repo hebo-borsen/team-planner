@@ -501,6 +501,117 @@
                 if (quoteBox) quoteBox.textContent = quotes[Math.floor(Math.random() * quotes.length)];
             }, 5000);
 
+            // Bouncing theme toggle + MC Hammer lyrics box
+            var hammerBox = document.createElement('div');
+            hammerBox.className = 'rounded-xl shadow-2xl text-center';
+            hammerBox.style.cssText = 'position:fixed;left:0;top:0;z-index:60;width:280px;will-change:transform;transition:none;pointer-events:auto;overflow:hidden;';
+            var hammerToggle = document.createElement('div');
+            hammerToggle.className = 'bg-gray-700 px-4 py-3 flex items-center justify-center gap-2 cursor-pointer';
+            hammerToggle.innerHTML = '<span class="theme-sun px-1 rounded bg-transparent opacity-50">☀</span><span class="theme-moon px-1 rounded bg-indigo-500 text-white">☾</span>';
+            hammerBox.style.cursor = 'pointer';
+            hammerBox.addEventListener('click', function(e) { e.stopPropagation(); stopDvd(); });
+            var hammerLyrics = document.createElement('div');
+            hammerLyrics.className = 'bg-gray-900 text-amber-400 px-4 py-3 text-sm font-bold';
+            hammerLyrics.style.cssText = 'min-height:3em;display:flex;align-items:center;justify-content:center;font-family:monospace;';
+            hammerBox.appendChild(hammerToggle);
+            hammerBox.appendChild(hammerLyrics);
+            var hx = Math.random() * (winW - 280);
+            var hy = Math.random() * (winH - 120);
+            hammerBox.style.transform = 'translate(' + hx + 'px,' + hy + 'px)';
+            document.body.appendChild(hammerBox);
+
+            // Pulse animation (subtle scale on toggle icons only, lyrics always visible)
+            var pulseStyle = document.createElement('style');
+            pulseStyle.id = 'hammer-pulse-style';
+            pulseStyle.textContent = '@keyframes hammerPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.4)}} .hammer-pulse{animation:hammerPulse 0.8s ease-in-out infinite}';
+            document.head.appendChild(pulseStyle);
+            hammerToggle.classList.add('hammer-pulse');
+
+            // Hide the original theme toggles in the secondary header
+            if (themeBtn) themeBtn.style.display = 'none';
+            if (themeBtnMobile) themeBtnMobile.style.display = 'none';
+
+            var hRect = hammerBox.getBoundingClientRect();
+            var baseSpeed = 0.8 + Math.random() * 1.2;
+            items.push({
+                el: hammerBox,
+                x: hx,
+                y: hy,
+                w: hRect.width,
+                h: hRect.height,
+                vx: (Math.random() < 0.5 ? baseSpeed : -baseSpeed) * 4,
+                vy: (Math.random() < 0.5 ? baseSpeed : -baseSpeed) * 4,
+                hueIdx: 0,
+                isHammer: true,
+            });
+
+            // MC Hammer lyrics engine
+            var hammerLines = [
+                "You can't touch this","You can't touch this","You can't touch this","You can't touch this","",
+                'My, my, my, my music hits me so hard','Makes me say, "Oh, my Lord','Thank you for blessin\' me with a mind to rhyme and two hype feet"',
+                "It feels good, when you know you're down","A super dope homeboy from the Oaktown","And I'm known as such","And this is a beat, uh, you can't touch","",
+                "I told you, homeboy (You can't touch this)","Yeah, that's how we livin' and ya know (You can't touch this)",
+                "Look in my eyes, man (You can't touch this)","Yo, let me bust the funky lyrics (You can't touch this)","",
+                "Fresh new kicks and pants","You gotta like that, now you know you wanna dance","So move out of your seat",
+                "And get a fly girl and catch this beat","While it's rollin', hold on","Pump a little bit and let 'em know it's goin' on",
+                "Like that, like that","Cold on a mission, so fall on back","Let 'em know that you're too much","And this is a beat, uh, they can't touch","",
+                "Yo, I told you (You can't touch this)","Why you standin' there, man? (You can't touch this)",
+                "Yo, sound the bell, school's in, sucker (You can't touch this)","",
+                "Give me a song or rhythm","Makin' 'em sweat, that's what I'm givin' 'em","Now, they know",
+                "You talkin' 'bout the Hammer, you're talkin' 'bout a show","That's hyped and tight","Singers are sweatin', so pass them a wipe",
+                "Or a tape to learn","What's it gonna take in the 90s to burn","The charts? Legit","Either work hard or you might as well quit","",
+                "That's word because you know (You can't touch this)","You can't touch this","Break it down","",
+                "Oh, oh, oh, oh, oh","Oh, oh, oh, oh, oh","Oh, oh, oh, oh, oh","Oh, oh, oh, oh\u2014","Stop, Hammer time","",
+                "Go with the flow, it is said","That if you can't groove to this then you probably are dead",
+                "So wave yo' hands in the air","Bust a few moves, run your fingers through your hair",
+                "This is it, for a winner","Dance to this and you're gonna get thinner","Move, slide your rump",
+                "Just for a minute let's all do the bump","(Bump, bump, bump)","",
+                "Yeah (You can't touch this)","Look, man (You can't touch this)",
+                "You better get hype, boy, because you know you can't (You can't touch this)","Ring the bell, school's back in","Break it down","",
+                "Oh, oh, oh, oh, oh","Oh, oh, oh, oh, oh","Oh, oh, oh, oh, oh","Oh, oh, oh, oh\u2014","Stop, Hammer time","",
+                "(Woah, woah)","(Woah, woah)","Oh, woah","Oh, woah","Oooh","Woah, woah, woah, woah","",
+                "(Woah, woah, woah, woah)","You can't touch this","(Woah, woah, woah, woah)","You can't touch this",
+                "(Woah, woah, woah, woah)","You can't touch this","(Woah, woah, woah, woah)","You can't touch this","Break it down","",
+                "Oh, oh, oh, oh, oh","Oh, oh, oh, oh, oh","Oh, oh, oh, oh, oh","Oh, oh, oh, oh\u2014","Stop, Hammer time","",
+                "Every time you see me, the Hammer's just so hyped","I'm dope on the floor and I'm magic on the mic",
+                "Now why would I ever stop doin' this?","With others makin' records that just don't hit",
+                'I\'ve toured around the world, from London to the Bay',
+                '"It\'s Hammer," "Go Hammer," "MC Hammer," "Yo, Hammer"',
+                "And the rest can go and play","You can't touch this","",
+                "You can't touch this","You can't touch this","Yeah (You can't touch this)",
+                "I told you (Can't touch this)","Too hot (Can't touch this)","Yo, we outta here (Can't touch this)",
+            ];
+            var hLineIdx = 0, hWordIdx = 0, hCurrentWords = [];
+            var hammerLyricsInterval = setInterval(function() {
+                if (!hammerLyrics) return;
+                if (hLineIdx >= hammerLines.length) { hLineIdx = 0; }
+                var line = hammerLines[hLineIdx];
+                if (line === '') {
+                    hammerLyrics.textContent = '';
+                    hLineIdx++;
+                    hWordIdx = 0;
+                    hCurrentWords = [];
+                    return;
+                }
+                if (hWordIdx === 0) {
+                    hCurrentWords = [];
+                    var words = line.split(' ');
+                    hCurrentWords = words;
+                }
+                if (hWordIdx < hCurrentWords.length) {
+                    hammerLyrics.textContent = hCurrentWords.slice(0, hWordIdx + 1).join(' ');
+                    hWordIdx++;
+                } else {
+                    hLineIdx++;
+                    hWordIdx = 0;
+                    hCurrentWords = [];
+                }
+            }, 350);
+
+            // Store references for cleanup
+            hammerBox._lyricsInterval = hammerLyricsInterval;
+            hammerBox._lyricsEl = hammerLyrics;
+
             rafId = requestAnimationFrame(tick);
         }
 
@@ -541,12 +652,20 @@
             document.getElementById('favicon').href = parrotStatic;
 
             items.forEach(function(it) {
-                if (it.isQuote) {
+                if (it.isQuote || it.isHammer) {
+                    if (it.el._lyricsInterval) clearInterval(it.el._lyricsInterval);
                     it.el.remove();
                 } else {
                     it.el.setAttribute('style', it.el._dvdOrig || '');
                 }
             });
+
+            var pulseStyle = document.getElementById('hammer-pulse-style');
+            if (pulseStyle) pulseStyle.remove();
+
+            // Restore original theme toggles
+            if (themeBtn) themeBtn.style.display = '';
+            if (themeBtnMobile) themeBtnMobile.style.display = '';
 
             quoteBox = null;
             items = [];
