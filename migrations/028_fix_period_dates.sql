@@ -1,0 +1,1 @@
+UPDATE holiday_periods SET start_date = DATE(CONCAT(SUBSTRING(label, 6, 4), '-01-01')), end_date = DATE(CONCAT(SUBSTRING(label, 6, 4), '-12-31')), earning_start = DATE(CONCAT(SUBSTRING(label, 1, 4), '-09-01')), earning_end = DATE(CONCAT(SUBSTRING(label, 6, 4), '-08-31'));

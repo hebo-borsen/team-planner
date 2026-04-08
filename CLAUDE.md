@@ -48,14 +48,33 @@ templates/
 - **Keep imports at the top** of each file, to keep the code clean and readable.
 - **Date format is `1. feb - 2026`**. All user-facing dates use the `|fmtdate` Jinja2 filter (e.g. `{{ date|fmtdate }}`). For dates with time, use `|fmtdatetime` (e.g. `1. feb - 2026 14:30`). HTML `<input type="date">` values must stay in ISO format (required by browsers).
 
+### Holiday Periods: Earning vs Spending
+
+Each holiday year has two distinct periods:
+
+- **Earning Period** (Optjeningsperiode): Sep 1 Year N → Aug 31 Year N+1. This is when holiday days accrue. Used to calculate how many days a user has earned so far.
+- **Holiday Period / Spending Period** (Afholdelsesperiode): Jan 1 Year N+1 → Dec 31 Year N+1. This is when earned days can be used.
+
+**"Holiday period" always means the spending period.** This is the one that matters for product owners and day-to-day use. The earning period exists in the background to power accrual calculations.
+
+In the database (`holiday_periods` table):
+- `start_date` / `end_date` = the **spending period** (Jan 1 – Dec 31)
+- `earning_start` / `earning_end` = the **earning period** (Sep 1 – Aug 31)
+- Periods are auto-generated on app startup by `db.ensure_periods_exist()` — not editable by admins
+
+Public holidays (`period_holidays` table) are associated with a **spending period** via `period_id`. A holiday on May 14 2026 belongs to the 2025/2026 spending period (Jan 1 2026 – Dec 31 2026).
+
 ### Database Schema
 
 - `team_members`: Stores team member names and emojis
 - `vacation_days`: Stores vacation dates with foreign key to team_members
-- `holidays`: Stores public holidays with date and name
+- `holiday_periods`: Holiday year definitions with earning and spending date ranges
+- `period_holidays`: Public holidays per spending period (shared across all departments)
+- `holidays`: Legacy table (unused — superseded by `period_holidays`)
 - `events`: Stores events for team planning
 - `event_responses`: Stores who is attending which event
 - `users`: Authentication (shortname stored as `username`, hashed password, email, display_name, theme, role, accrued_days)
+- `user_secondary_departments`: Many-to-many for users displayed as guests in additional departments
 - `operation_log`: Audit log with nullable `user_id`, `operation_type` (e.g. `holiday_recalculation`, `setting_update`), and `message`
 - `schema_migrations`: Tracks which migrations have been applied
 
@@ -64,6 +83,8 @@ templates/
 Migrations run automatically on app startup via `migrate.py`. They are tracked in the `schema_migrations` table. To add a schema change, create the next numbered `.sql` file in `migrations/` (e.g. `006_add_something.sql`). Keep migrations idempotent — the runner tolerates duplicate column errors (MySQL 1060).
 
 **Important:** MySQL does not support `ADD COLUMN IF NOT EXISTS`. Plain `ALTER TABLE ... ADD COLUMN` is fine — the migration runner handles duplicate column errors gracefully.
+
+**Important:** Do NOT use SQL comments (`--`) in migration files. The migration runner splits on `;` and does not strip comments, so a comment containing a semicolon will cause a syntax error.
 
 ## Running the Application
 
