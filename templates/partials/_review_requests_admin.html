@@ -8,10 +8,18 @@
                    title="Change color">
             <div>
                 <div class="font-semibold flex items-center gap-2">
-                    {{ rr_title }}
-                    {% if rr_dept_name %}
+                    <span id="rr-title-display-{{ rr_id }}" class="cursor-pointer hover:underline"
+                          onclick="var d=this,f=document.getElementById('rr-title-form-{{ rr_id }}'),i=f.querySelector('input');d.classList.add('hidden');f.classList.remove('hidden');i.value=d.textContent.trim();i.focus();i.select()">{{ rr_title }}</span>
+                    <form id="rr-title-form-{{ rr_id }}" class="hidden inline-flex items-center gap-1"
+                          hx-post="/review-requests/{{ rr_id }}/title" hx-target="#review-requests-list" hx-swap="innerHTML">
+                        <input type="text" name="title" required
+                               class="px-2 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm font-semibold w-56"
+                               onkeydown="if(event.key==='Escape'){this.closest('form').classList.add('hidden');document.getElementById('rr-title-display-{{ rr_id }}').classList.remove('hidden')}">
+                        <button type="submit" class="text-green-600 dark:text-green-400 hover:text-green-800 text-sm font-medium">Save</button>
+                        <button type="button" class="text-gray-400 hover:text-gray-600 text-sm"
+                                onclick="this.closest('form').classList.add('hidden');document.getElementById('rr-title-display-{{ rr_id }}').classList.remove('hidden')">Cancel</button>
+                    </form>
                     <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{{ rr_dept_name }}</span>
-                    {% endif %}
                     {% if not rr_active %}
                     <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Upcoming</span>
                     {% endif %}

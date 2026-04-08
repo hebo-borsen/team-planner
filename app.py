@@ -88,6 +88,7 @@ def login_required(f):
                     session['initials'] = user[5] or user[1]
                     session['font'] = user[6] or ''
                     session['needs_initial_accrued'] = db.needs_initial_accrued(user[0])
+                    session['department_id'] = db.get_user_department_id(user[0])
                 else:
                     return redirect(url_for('login'))
             else:
@@ -106,7 +107,7 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         if session.get('role') != 'admin':
             flash('Permission denied.', 'error')
-            return redirect(url_for('calendar_view'))
+            return redirect(url_for('calendar_redirect'))
         return f(*args, **kwargs)
     return decorated
 
@@ -114,6 +115,17 @@ def admin_required(f):
 @app.context_processor
 def inject_globals():
     is_admin = session.get('role') == 'admin'
+    all_departments = db.get_all_departments() if session.get('user_id') else []
+    user_dept_id = db.get_user_department_id(session['user_id']) if session.get('user_id') else None
+    session['department_id'] = user_dept_id
+    current_dept_id = session.get('viewing_department_id') or user_dept_id
+    current_dept_name = None
+    is_fun_dept = False
+    for did, dname, _, dfun in all_departments:
+        if did == current_dept_id:
+            current_dept_name = dname
+        if did == user_dept_id:
+            is_fun_dept = bool(dfun)
     return {
         'theme': session.get('theme', 'light'),
         'user_id': session.get('user_id'),
@@ -122,6 +134,10 @@ def inject_globals():
         'user_font': session.get('font', ''),
         'is_admin': is_admin,
         'active_tab': request.endpoint or '',
+        'nav_departments': all_departments,
+        'nav_current_dept_id': current_dept_id,
+        'nav_current_dept_name': current_dept_name,
+        'is_fun_dept': is_fun_dept,
     }
 
 
@@ -147,8 +163,9 @@ def login():
             session['initials'] = user[5] or user[1]
             session['font'] = user[6] or ''
             session['needs_initial_accrued'] = db.needs_initial_accrued(user[0])
+            session['department_id'] = db.get_user_department_id(user[0])
             token = db.create_session_token(user[0])
-            resp = redirect(url_for('calendar_view'))
+            resp = redirect(url_for('calendar_redirect'))
             resp.set_cookie('session_token', token, max_age=2592000, httponly=True, samesite='Lax')
             return resp
         flash('Invalid username or password.', 'error')
@@ -165,6 +182,7 @@ def register():
         font = request.form.get('font', '').strip() or None
         password = request.form.get('password', '')
         confirm = request.form.get('confirm', '')
+        department_id = request.form.get('department_id', type=int) or None
         if not shortname or not display_name or not password or not confirm:
             flash('Please fill in all fields.', 'error')
             return redirect(url_for('register'))
@@ -174,13 +192,14 @@ def register():
         if len(password) < 4:
             flash('Password must be at least 4 characters.', 'error')
             return redirect(url_for('register'))
-        success, msg = db.register_user(shortname, password, display_name=display_name, email=email, font=font)
+        success, msg = db.register_user(shortname, password, display_name=display_name, email=email, font=font, department_id=department_id)
         if success:
             flash(msg, 'success')
             return redirect(url_for('login'))
         flash(msg, 'error')
         return redirect(url_for('register'))
-    return render_template('register.html')
+    departments = db.get_all_departments()
+    return render_template('register.html', departments=departments)
 
 
 @app.route('/logout', methods=['POST'])
@@ -211,7 +230,7 @@ def force_password():
             db.update_password(session['user_id'], new_pw)
             session['must_change_password'] = False
             flash('Password updated!', 'success')
-            return redirect(url_for('calendar_view'))
+            return redirect(url_for('calendar_redirect'))
         return redirect(url_for('force_password'))
     return render_template('force_password.html')
 
@@ -255,19 +274,54 @@ def initial_accrued():
                                start_date=user_start)
         session['needs_initial_accrued'] = False
         flash('Holiday balance saved!', 'success')
-        return redirect(url_for('calendar_view'))
+        return redirect(url_for('calendar_redirect'))
     return render_template('initial_accrued.html',
                            period_label=period_label, days_off=days_off,
                            period_start=period_start, period_end=period_end)
 
 
 # ---------------------------------------------------------------------------
-# Calendar (home)
+# Calendar
 # ---------------------------------------------------------------------------
 
 @app.route('/')
 @login_required
-def calendar_view():
+def home():
+    return redirect(url_for('calendar_redirect'))
+
+
+@app.route('/calendar')
+@login_required
+def calendar_redirect():
+    dept_id = session.get('viewing_department_id') or session.get('department_id')
+    if not dept_id:
+        departments = db.get_all_departments()
+        if departments:
+            dept_id = departments[0][0]
+        else:
+            flash('No departments have been created yet.', 'warning')
+            return redirect(url_for('settings') if session.get('role') == 'admin' else url_for('profile'))
+    return redirect(url_for('calendar_view', dept_id=dept_id))
+
+
+@app.route('/calendar/<int:dept_id>')
+@login_required
+def calendar_view(dept_id):
+    # Verify department exists
+    all_departments = db.get_all_departments()
+    dept_exists = any(d[0] == dept_id for d in all_departments)
+    if not dept_exists:
+        flash('Department not found.', 'error')
+        return redirect(url_for('calendar_redirect'))
+
+    # Admins can view any department; non-admins can only view their own
+    user_dept_id = db.get_user_department_id(session['user_id'])
+    if session.get('role') != 'admin' and user_dept_id != dept_id:
+        return redirect(url_for('calendar_view', dept_id=user_dept_id))
+
+    # Track which department the admin is currently viewing
+    session['viewing_department_id'] = dept_id
+
     today = date.today()
 
     start_str = request.args.get('from')
@@ -275,33 +329,16 @@ def calendar_view():
     start_date = date.fromisoformat(start_str) if start_str else today
     end_date = date.fromisoformat(end_str) if end_str else today + timedelta(days=29)
 
-    all_users = db.get_all_users_for_calendar()
-    all_departments = db.get_all_departments()
-    visible_dept_ids = db.get_visible_departments(session['user_id'])
+    users = db.get_all_users_for_calendar(department_id=dept_id)
 
-    # Filter users by visible departments
-    if visible_dept_ids:
-        users = [u for u in all_users if u[5] in visible_dept_ids]
-    else:
-        users = all_users
-
-    # Group users by department for the template
+    # Group users by department for the template (single department now)
     dept_groups = []
-    current_dept_id = object()  # sentinel
-    current_group = None
-    for u in users:
-        dept_id, dept_name = u[5], u[6]
-        if dept_id != current_dept_id:
-            if current_group:
-                dept_groups.append(current_group)
-            current_group = {'id': dept_id, 'name': dept_name or 'Unassigned', 'users': []}
-            current_dept_id = dept_id
-        current_group['users'].append(u)
-    if current_group:
-        dept_groups.append(current_group)
+    if users:
+        dept_name = users[0][6] or 'Unassigned'
+        dept_groups.append({'id': dept_id, 'name': dept_name, 'users': list(users)})
 
     vacations_data = db.get_vacations_for_date_range(start_date, end_date)
-    holidays_data = db.get_holidays_for_date_range(start_date, end_date)
+    holidays_data = db.get_holidays_for_date_range(start_date, end_date, department_id=dept_id)
 
     days = []
     current = start_date
@@ -326,7 +363,8 @@ def calendar_view():
 
     total_vacations = db.get_vacation_count()
 
-    # Holiday period summary
+    # Holiday period summary (only show on user's own department)
+    viewing_own_dept = (dept_id == user_dept_id)
     period_id = db.get_current_period_id()
     period_summary = None
     period_label = None
@@ -349,7 +387,7 @@ def calendar_view():
                     period_summary['remaining'] / months_left, 1)
                 period_summary['months_left'] = months_left
                 if session.get('role') == 'admin':
-                    admin_summaries = db.get_all_users_period_summary(pstart, pend)
+                    admin_summaries = db.get_all_users_period_summary(pstart, pend, department_id=dept_id)
                 break
 
     if period_start and period_end_date:
@@ -359,11 +397,11 @@ def calendar_view():
         vacation_summary = {'days_off_per_year': 34, 'used': 0,
                             'remaining': 34, 'accrued': 0}
 
-    # Review period requests
-    pending_reviews = db.get_pending_review_requests_for_user(session['user_id'])
+    # Review period requests (banner only on user's own department)
+    pending_reviews = db.get_pending_review_requests_for_user(session['user_id']) if viewing_own_dept else []
     all_grid_reviews = db.get_all_review_requests_for_grid()
     signoff_map = db.get_review_signoff_user_ids()  # {request_id: {user_ids}}
-    all_holidays = db.get_all_enabled_holidays() if pending_reviews else set()
+    all_holidays = db.get_all_enabled_holidays(department_id=dept_id) if pending_reviews else set()
 
     # Build per-user review cell info: user_review_cells[uid][date] = (color, opacity, signed)
     # Priority: active+pending > active+signed > inactive (higher priority wins)
@@ -372,11 +410,8 @@ def calendar_view():
     PRIORITY_INACTIVE = 1
     user_review_cells = {}  # uid -> {date -> (color, opacity, signed)}
     user_review_priority = {}  # uid -> {date -> priority}
-    current_user_id = session['user_id']
     pending_review_ids = {rr[0] for rr in pending_reviews}
     review_dates = set()
-
-    user_dept_map = {u[0]: u[5] for u in all_users}
 
     for rr in all_grid_reviews:
         # (id, title, start_date, end_date, department_id, color, active)
@@ -386,7 +421,7 @@ def calendar_view():
         while d <= rr_end:
             if rr_active:
                 review_dates.add(d)
-            for u in all_users:
+            for u in users:
                 uid = u[0]
                 u_dept = u[5]
                 if rr_dept_id and u_dept != rr_dept_id:
@@ -407,6 +442,8 @@ def calendar_view():
                     user_review_priority.setdefault(uid, {})[d] = prio
             d += timedelta(days=1)
 
+    cal_base = url_for('calendar_view', dept_id=dept_id)
+
     template_data = {
         'today': today,
         'start_date': start_date,
@@ -414,15 +451,15 @@ def calendar_view():
         'days': days,
         'users': users,
         'dept_groups': dept_groups,
-        'all_departments': all_departments,
-        'visible_dept_ids': visible_dept_ids,
+        'cal_base': cal_base,
+        'cal_dept_id': dept_id,
         'holiday_dict': holiday_dict,
         'vacation_dict': vacation_dict,
         'weekend_days': weekend_days,
         'total_vacations': total_vacations,
         'vacation_summary': vacation_summary,
         'current_year': today.year,
-        'period_summary': period_summary,
+        'period_summary': period_summary if viewing_own_dept else None,
         'period_label': period_label,
         'period_end_date': period_end_date,
         'admin_summaries': admin_summaries,
@@ -458,19 +495,19 @@ def add_vacation():
     end_date = request.form.get('end_date')
     if not user_id or not vacation_date:
         flash('Please select a user and date.', 'error')
-        return redirect(url_for('calendar_view'))
+        return redirect(url_for('calendar_redirect'))
     start = date.fromisoformat(vacation_date)
     end = date.fromisoformat(end_date) if end_date else start
     if start > end:
         flash('End date must be after start date.', 'error')
-        return redirect(url_for('calendar_view'))
+        return redirect(url_for('calendar_redirect'))
     requester = session.get('username', '')
     added, skipped = db.add_vacation_for_user(user_id, start, end, requested_by=requester)
     if added:
         flash(f'Added {added} vacation day(s)!', 'success')
     if skipped:
         flash(f'Skipped {skipped} duplicate day(s).', 'info')
-    referer = request.form.get('redirect') or url_for('calendar_view')
+    referer = request.form.get('redirect') or url_for('calendar_redirect')
     return redirect(referer)
 
 
@@ -479,7 +516,7 @@ def add_vacation():
 def delete_vacation(vacation_id):
     db.delete_vacation(vacation_id)
     flash('Vacation day deleted.', 'success')
-    return redirect(url_for('calendar_view'))
+    return redirect(url_for('calendar_redirect'))
 
 
 @app.route('/vacations/remove-by-dates', methods=['POST'])
@@ -490,11 +527,11 @@ def remove_vacations_by_dates():
     end = request.form.get('end_date')
     if not user_id or not start or not end:
         flash('Missing parameters.', 'error')
-        return redirect(url_for('calendar_view'))
+        return redirect(url_for('calendar_redirect'))
     # Non-admins can only remove their own vacations
     if session.get('role') != 'admin' and user_id != session.get('user_id'):
         flash('You can only remove your own vacations.', 'error')
-        return redirect(url_for('calendar_view'))
+        return redirect(url_for('calendar_redirect'))
     start_date = date.fromisoformat(start)
     end_date = date.fromisoformat(end)
     ids = db.get_vacation_ids_for_user_dates(user_id, start_date, end_date)
@@ -503,7 +540,7 @@ def remove_vacations_by_dates():
         flash(f'Deleted {deleted} vacation day(s).', 'success')
     else:
         flash('No vacation days found in that range.', 'warning')
-    return redirect(url_for('calendar_view'))
+    return redirect(url_for('calendar_redirect'))
 
 
 @app.route('/vacations/export')
@@ -533,7 +570,7 @@ def export_vacations():
 @login_required
 def my_vacations():
     groups = db.get_user_vacations_grouped(session['user_id'])
-    holidays = db.get_all_enabled_holidays()
+    holidays = db.get_all_enabled_holidays(department_id=session.get('department_id'))
     signed_reviews = db.get_signed_off_reviews_for_user(session['user_id'])
     return render_template('my_vacations.html', groups=groups,
                            holidays=holidays, signed_reviews=signed_reviews,
@@ -824,15 +861,17 @@ def admin_change_password(user_id):
 @app.route('/settings')
 @admin_required
 def settings():
+    dept_id = session.get('viewing_department_id') or session.get('department_id')
     periods = db.get_holiday_periods()
     period_id = request.args.get('period_id', type=int) or db.get_current_period_id()
-    holidays = db.get_period_holidays(period_id) if period_id else []
-    review_requests = db.get_all_review_requests()
+    holidays = db.get_period_holidays(period_id, department_id=dept_id) if period_id else []
+    review_requests = db.get_all_review_requests(department_id=dept_id)
     departments = db.get_all_departments()
     return render_template('settings.html', periods=periods,
                            selected_period_id=period_id, holidays=holidays,
                            review_requests=review_requests,
                            departments=departments,
+                           holiday_dept_id=dept_id,
                            active_tab='settings', today=date.today())
 
 
@@ -840,19 +879,24 @@ def settings():
 @admin_required
 def settings_holidays():
     period_id = request.args.get('period_id', type=int)
-    holidays = db.get_period_holidays(period_id) if period_id else []
+    dept_id = request.args.get('department_id', type=int)
+    if dept_id is None:
+        dept_id = session.get('viewing_department_id') or session.get('department_id')
+    holidays = db.get_period_holidays(period_id, department_id=dept_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
+                           holiday_dept_id=dept_id,
                            today=date.today())
 
 
 @app.route('/settings/holidays/<int:holiday_id>/toggle', methods=['POST'])
 @admin_required
 def toggle_holiday(holiday_id):
-    period_id = db.toggle_period_holiday(holiday_id)
-    holidays = db.get_period_holidays(period_id) if period_id else []
+    period_id, department_id = db.toggle_period_holiday(holiday_id)
+    holidays = db.get_period_holidays(period_id, department_id=department_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
+                           holiday_dept_id=department_id,
                            today=date.today())
 
 
@@ -862,10 +906,11 @@ def update_holiday_date(holiday_id):
     new_date = request.form.get('holiday_date')
     if not new_date:
         return '', 400
-    period_id = db.update_period_holiday_date(holiday_id, date.fromisoformat(new_date))
-    holidays = db.get_period_holidays(period_id) if period_id else []
+    period_id, department_id = db.update_period_holiday_date(holiday_id, date.fromisoformat(new_date))
+    holidays = db.get_period_holidays(period_id, department_id=department_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
+                           holiday_dept_id=department_id,
                            today=date.today())
 
 
@@ -875,21 +920,24 @@ def add_period_holiday():
     period_id = request.form.get('period_id', type=int)
     name = request.form.get('name', '').strip()
     holiday_date = request.form.get('holiday_date')
+    department_id = request.form.get('department_id', type=int)
     if period_id and name and holiday_date:
-        db.add_period_holiday(period_id, name, date.fromisoformat(holiday_date))
-    holidays = db.get_period_holidays(period_id) if period_id else []
+        db.add_period_holiday(period_id, name, date.fromisoformat(holiday_date), department_id=department_id)
+    holidays = db.get_period_holidays(period_id, department_id=department_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
+                           holiday_dept_id=department_id,
                            today=date.today())
 
 
 @app.route('/settings/holidays/<int:holiday_id>/delete', methods=['DELETE'])
 @admin_required
 def delete_period_holiday(holiday_id):
-    period_id = db.delete_period_holiday(holiday_id)
-    holidays = db.get_period_holidays(period_id) if period_id else []
+    period_id, department_id = db.delete_period_holiday(holiday_id)
+    holidays = db.get_period_holidays(period_id, department_id=department_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
+                           holiday_dept_id=department_id,
                            today=date.today())
 
 
@@ -897,16 +945,40 @@ def delete_period_holiday(holiday_id):
 # Departments (admin)
 # ---------------------------------------------------------------------------
 
+@app.route('/organisation')
+@admin_required
+def organisation():
+    periods = db.get_holiday_periods()
+    period_id = request.args.get('period_id', type=int) or db.get_current_period_id()
+    holidays = db.get_period_holidays(period_id, department_id=None) if period_id else []
+    departments = db.get_all_departments()
+    return render_template('organisation.html', periods=periods,
+                           selected_period_id=period_id, holidays=holidays,
+                           departments=departments, holiday_dept_id=None,
+                           active_tab='organisation', today=date.today())
+
+
+@app.route('/organisation/holidays')
+@admin_required
+def organisation_holidays():
+    period_id = request.args.get('period_id', type=int)
+    holidays = db.get_period_holidays(period_id, department_id=None) if period_id else []
+    return render_template('partials/_period_holidays.html',
+                           holidays=holidays, selected_period_id=period_id,
+                           holiday_dept_id=None,
+                           today=date.today())
+
+
 @app.route('/departments', methods=['POST'])
 @admin_required
 def create_department():
     name = request.form.get('name', '').strip()
     if not name:
         flash('Please enter a department name.', 'error')
-        return redirect(url_for('settings'))
+        return redirect(url_for('organisation'))
     success, msg = db.create_department(name)
     flash(msg, 'success' if success else 'error')
-    return redirect(url_for('settings'))
+    return redirect(url_for('organisation'))
 
 
 @app.route('/departments/<int:dept_id>', methods=['DELETE'])
@@ -929,6 +1001,16 @@ def update_department_name(dept_id):
                            departments=departments)
 
 
+@app.route('/departments/<int:dept_id>/fun', methods=['POST'])
+@admin_required
+def toggle_department_fun(dept_id):
+    is_fun = request.form.get('is_fun') == '1'
+    db.toggle_department_fun(dept_id, is_fun)
+    departments = db.get_all_departments()
+    return render_template('partials/_department_list.html',
+                           departments=departments)
+
+
 @app.route('/users/<int:uid>/department', methods=['POST'])
 @admin_required
 def set_user_department(uid):
@@ -936,18 +1018,6 @@ def set_user_department(uid):
     db.set_user_department(uid, dept_id)
     flash('Department updated.', 'success')
     return redirect(url_for('user_management'))
-
-
-@app.route('/departments/visibility', methods=['POST'])
-@login_required
-def toggle_department_visibility():
-    dept_id = request.form.get('department_id', type=int)
-    if not dept_id:
-        # dept_id=0 means "show all" — clear all filters
-        db.set_visible_departments(session['user_id'], [])
-        return redirect(url_for('calendar_view'))
-    db.toggle_visible_department(session['user_id'], dept_id)
-    return redirect(request.referrer or url_for('calendar_view'))
 
 
 # ---------------------------------------------------------------------------
@@ -960,10 +1030,10 @@ def create_review_request():
     title = request.form.get('title', '').strip()
     start_date_str = request.form.get('start_date')
     end_date_str = request.form.get('end_date')
-    if not title or not start_date_str or not end_date_str:
+    dept_id = request.form.get('department_id', type=int)
+    if not title or not start_date_str or not end_date_str or not dept_id:
         flash('Please fill in all fields.', 'error')
         return redirect(url_for('settings'))
-    dept_id = request.form.get('department_id', type=int) or None
     color = request.form.get('color', '#f59e0b').strip()
     start = date.fromisoformat(start_date_str)
     end = date.fromisoformat(end_date_str)
@@ -981,7 +1051,8 @@ def create_review_request():
 @admin_required
 def toggle_review_request(request_id):
     db.toggle_review_request_active(request_id)
-    review_requests = db.get_all_review_requests()
+    dept_id = session.get('viewing_department_id') or session.get('department_id')
+    review_requests = db.get_all_review_requests(department_id=dept_id)
     return render_template('partials/_review_requests_admin.html',
                            review_requests=review_requests, today=date.today())
 
@@ -990,7 +1061,8 @@ def toggle_review_request(request_id):
 @admin_required
 def delete_review_request(request_id):
     db.delete_review_request(request_id)
-    review_requests = db.get_all_review_requests()
+    dept_id = session.get('viewing_department_id') or session.get('department_id')
+    review_requests = db.get_all_review_requests(department_id=dept_id)
     return render_template('partials/_review_requests_admin.html',
                            review_requests=review_requests, today=date.today())
 
@@ -1002,7 +1074,21 @@ def update_review_request_color(request_id):
     if not color:
         return '', 400
     db.update_review_request_color(request_id, color)
-    review_requests = db.get_all_review_requests()
+    dept_id = session.get('viewing_department_id') or session.get('department_id')
+    review_requests = db.get_all_review_requests(department_id=dept_id)
+    return render_template('partials/_review_requests_admin.html',
+                           review_requests=review_requests, today=date.today())
+
+
+@app.route('/review-requests/<int:request_id>/title', methods=['POST'])
+@admin_required
+def update_review_request_title(request_id):
+    title = request.form.get('title', '').strip()
+    if not title:
+        return '', 400
+    db.update_review_request_title(request_id, title)
+    dept_id = session.get('viewing_department_id') or session.get('department_id')
+    review_requests = db.get_all_review_requests(department_id=dept_id)
     return render_template('partials/_review_requests_admin.html',
                            review_requests=review_requests, today=date.today())
 
@@ -1027,7 +1113,7 @@ def mark_review_seen(request_id):
 def sign_off_review(request_id):
     db.mark_review_decided(request_id, session['user_id'])
     flash('Review signed off!', 'success')
-    return redirect(request.referrer or url_for('calendar_view'))
+    return redirect(request.referrer or url_for('calendar_redirect'))
 
 
 @app.route('/review-requests/<int:request_id>/undo-sign-off', methods=['POST'])
@@ -1067,5 +1153,5 @@ def toggle_theme():
     if session.get('user_id'):
         db.update_user_theme(session['user_id'], new_theme)
     resp = make_response('', 200)
-    resp.headers['HX-Redirect'] = request.referrer or '/'
+    resp.headers['HX-Redirect'] = request.referrer or '/calendar'
     return resp

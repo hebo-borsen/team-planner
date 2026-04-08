@@ -112,6 +112,30 @@ tr.cal-hover td:hover::after {
                 </td>
                 {% endfor %}
             </tr>
+            {% set wk = namespace(spans=[], cur_week='', cur_count=0) %}
+            {% for day in days %}
+                {% set w = day.strftime('%V') %}
+                {% if w != wk.cur_week %}
+                    {% if wk.cur_week %}
+                        {% set _ = wk.spans.append({'week': wk.cur_week, 'count': wk.cur_count}) %}
+                    {% endif %}
+                    {% set wk.cur_week = w %}
+                    {% set wk.cur_count = 1 %}
+                {% else %}
+                    {% set wk.cur_count = wk.cur_count + 1 %}
+                {% endif %}
+            {% endfor %}
+            {% if wk.cur_week %}
+                {% set _ = wk.spans.append({'week': wk.cur_week, 'count': wk.cur_count}) %}
+            {% endif %}
+            <tr>
+                <td class="px-3 py-1 border border-gray-200 dark:border-gray-700 sticky left-0 bg-gray-100 dark:bg-gray-800 z-10 text-[10px] text-gray-400 dark:text-gray-500">Week</td>
+                {% for span in wk.spans %}
+                <td colspan="{{ span.count }}" class="px-1 py-0.5 text-center text-[10px] text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700 {{ 'bg-gray-50 dark:bg-gray-800/50' if loop.index is odd else 'bg-gray-100/50 dark:bg-gray-800' }}">
+                    {{ span.week|int }}
+                </td>
+                {% endfor %}
+            </tr>
         </tfoot>
     </table>
 </div>

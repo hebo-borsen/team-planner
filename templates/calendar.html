@@ -3,13 +3,14 @@
 {% block content %}
 <script>
 (function() {
+    var calBase = '{{ cal_base }}';
     if (!window.location.search.includes('from=')) {
         var saved = localStorage.getItem('calendarRange');
         if (saved) {
             try {
                 var r = JSON.parse(saved);
                 if (r.from && r.to) {
-                    window.location.replace('/?from=' + r.from + '&to=' + r.to);
+                    window.location.replace(calBase + '?from=' + r.from + '&to=' + r.to);
                     return;
                 }
             } catch(e) {}
@@ -29,7 +30,7 @@ function saveCalRange(from, to) {
     <div class="flex items-center space-x-3">
         <div class="flex items-center space-x-1">
             {% for p in presets %}
-            <a href="/?from={{ p.from }}&to={{ p.to }}"
+            <a href="{{ cal_base }}?from={{ p.from }}&to={{ p.to }}"
                onclick="saveCalRange('{{ p.from }}', '{{ p.to }}')"
                class="px-3 py-1.5 text-xs font-medium rounded-lg
                       {{ 'bg-blue-600 text-white' if p.active else 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' }}">
@@ -40,14 +41,14 @@ function saveCalRange(from, to) {
         <div class="flex items-center space-x-1">
             <label for="cal-from" class="text-sm font-medium">From</label>
             <input type="date" name="from" id="cal-from" value="{{ start_date.isoformat() }}"
-                   hx-get="/" hx-target="#calendar-grid" hx-include="#cal-to" hx-push-url="true"
+                   hx-get="{{ cal_base }}" hx-target="#calendar-grid" hx-include="#cal-to" hx-push-url="true"
                    onchange="saveCalRange(this.value, document.getElementById('cal-to').value)"
                    class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
         </div>
         <div class="flex items-center space-x-1">
             <label for="cal-to" class="text-sm font-medium">To</label>
             <input type="date" name="to" id="cal-to" value="{{ end_date.isoformat() }}"
-                   hx-get="/" hx-target="#calendar-grid" hx-include="#cal-from" hx-push-url="true"
+                   hx-get="{{ cal_base }}" hx-target="#calendar-grid" hx-include="#cal-from" hx-push-url="true"
                    onchange="saveCalRange(document.getElementById('cal-from').value, this.value)"
                    class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
         </div>
@@ -88,30 +89,6 @@ function toggleFullWidth() {
 {% if pending_reviews %}
 <div id="review-banner-container" class="mb-4 space-y-3">
     {% include "partials/_review_banner.html" %}
-</div>
-{% endif %}
-
-{% if all_departments %}
-<div class="flex items-center gap-2 mb-4 flex-wrap">
-    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Departments:</span>
-    {% for did, dname, dsort in all_departments %}
-    <form method="post" action="/departments/visibility" class="inline">
-        <input type="hidden" name="department_id" value="{{ did }}">
-        <button type="submit"
-                class="px-2.5 py-1 text-xs font-medium rounded-full border
-                       {{ 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 border-blue-300 dark:border-blue-700' if not visible_dept_ids or did in visible_dept_ids else 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-300 dark:border-gray-700 line-through' }}">
-            {{ dname }}
-        </button>
-    </form>
-    {% endfor %}
-    {% if visible_dept_ids %}
-    <form method="post" action="/departments/visibility" class="inline">
-        <input type="hidden" name="department_id" value="0">
-        <button type="submit" class="px-2.5 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-            Show all
-        </button>
-    </form>
-    {% endif %}
 </div>
 {% endif %}
 
