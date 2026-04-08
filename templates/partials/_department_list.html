@@ -1,0 +1,27 @@
+{% if departments %}
+<div class="space-y-2">
+    {% for did, dname, dsort in departments %}
+    <div class="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+        <form method="post" action="/departments/{{ did }}/name"
+              hx-post="/departments/{{ did }}/name" hx-target="#department-list" hx-swap="innerHTML"
+              class="inline-flex items-center gap-2 flex-1">
+            <input type="text" name="name" value="{{ dname }}"
+                   data-original="{{ dname }}"
+                   oninput="this.nextElementSibling.classList.toggle('hidden', this.value.trim() === this.dataset.original)"
+                   class="font-medium text-sm bg-transparent border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:outline-none px-0 py-0 flex-1">
+            <button type="submit"
+                    class="hidden px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded">
+                Save
+            </button>
+        </form>
+        <button hx-delete="/departments/{{ did }}" hx-target="#department-list" hx-swap="innerHTML"
+                hx-confirm="Delete department '{{ dname }}'? Users will become unassigned."
+                class="px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded">
+            Delete
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-sm text-gray-500 dark:text-gray-400">No departments yet.</p>
+{% endif %}

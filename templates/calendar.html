@@ -85,14 +85,45 @@ function toggleFullWidth() {
 })();
 </script>
 
+{% if pending_reviews %}
+<div id="review-banner-container" class="mb-4 space-y-3">
+    {% include "partials/_review_banner.html" %}
+</div>
+{% endif %}
+
+{% if all_departments %}
+<div class="flex items-center gap-2 mb-4 flex-wrap">
+    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Departments:</span>
+    {% for did, dname, dsort in all_departments %}
+    <form method="post" action="/departments/visibility" class="inline">
+        <input type="hidden" name="department_id" value="{{ did }}">
+        <button type="submit"
+                class="px-2.5 py-1 text-xs font-medium rounded-full border
+                       {{ 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 border-blue-300 dark:border-blue-700' if not visible_dept_ids or did in visible_dept_ids else 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-300 dark:border-gray-700 line-through' }}">
+            {{ dname }}
+        </button>
+    </form>
+    {% endfor %}
+    {% if visible_dept_ids %}
+    <form method="post" action="/departments/visibility" class="inline">
+        <input type="hidden" name="department_id" value="0">
+        <button type="submit" class="px-2.5 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+            Show all
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
+
 <div id="calendar-grid">
     {% include "partials/_calendar_grid.html" %}
 </div>
 
 <div class="flex items-center gap-3 mt-3 text-xs text-gray-500 dark:text-gray-400">
-    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-blue-500"></span> Approved</span>
-    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-amber-300 dark:bg-amber-600"></span> Pending</span>
-    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-blue-500 ring-2 ring-red-500 ring-inset"></span> Removal requested</span>
+    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-blue-500"></span> Vacation</span>
+    {% if review_dates %}
+    <span class="inline-flex items-center gap-1"><span class="relative inline-block w-4 h-4 rounded bg-gray-100 dark:bg-gray-700"><span class="review-tri" style="background:#f59e0b"></span></span> Review period</span>
+    {% endif %}
 </div>
 
 <div class="flex items-center justify-between mt-4">
@@ -103,7 +134,7 @@ function toggleFullWidth() {
     </div>
     <button onclick="document.getElementById('vacation-modal').classList.remove('hidden')"
             class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg text-sm">
-        + {{ 'Add Vacation' if is_admin else 'Request Vacation' }}
+        + Add Vacation
     </button>
 </div>
 
@@ -135,12 +166,6 @@ function toggleFullWidth() {
                 {% endif %}
             </div>
         </div>
-        {% if period_summary.pending > 0 %}
-        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <div class="text-2xl font-bold text-amber-500">{{ period_summary.pending }}</div>
-            <div class="text-sm text-gray-500 dark:text-gray-400">Pending</div>
-        </div>
-        {% endif %}
         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
             <div class="text-sm text-gray-600 dark:text-gray-300 space-y-1.5">
                 <div class="flex justify-between">
@@ -178,19 +203,17 @@ function toggleFullWidth() {
                     <th class="text-left py-2 font-medium" onclick="sortTable(0)">Name <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-right py-2 font-medium" onclick="sortTable(1)">Entitlement <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-right py-2 font-medium" onclick="sortTable(2)">Used <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium" onclick="sortTable(3)">Pending <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium" onclick="sortTable(4)">Remaining <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium" onclick="sortTable(5)">Avg/month needed <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(3)">Remaining <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(4)">Avg/month needed <span class="sort-icon text-gray-400">&#8597;</span></th>
                 </tr>
             </thead>
             <tbody>
-                {% for uid, display_name, entitlement, used, pending in admin_summaries %}
+                {% for uid, display_name, entitlement, used in admin_summaries %}
                 {% set remaining = entitlement - (used|float) %}
                 <tr class="border-b border-gray-100 dark:border-gray-800">
                     <td class="py-2.5">{{ display_name }}</td>
                     <td class="py-2.5 text-right">{{ entitlement }}</td>
                     <td class="py-2.5 text-right">{{ used }}</td>
-                    <td class="py-2.5 text-right">{{ pending if pending > 0 else '' }}</td>
                     <td class="py-2.5 text-right font-medium">
                         {{ remaining }}
                     </td>
@@ -240,20 +263,18 @@ function toggleFullWidth() {
 <script>
 (function() {
     var startDate = null, endDate = null, dragRow = null, dragUid = null, dragging = false;
-    var dragMode = null; // 'empty', 'vacation', or 'pending'
-    var isAdmin = {{ 'true' if is_admin else 'false' }};
+    var dragMode = null; // 'empty' or 'vacation'
     var SKIP_TYPES = {weekend: 1, holiday: 1};
 
     function clearSelection() {
         document.querySelectorAll('.cal-cell.ring-2').forEach(function(el) {
-            el.classList.remove('ring-2', 'ring-blue-500', 'ring-red-500', 'ring-amber-500', 'ring-inset');
+            el.classList.remove('ring-2', 'ring-blue-500', 'ring-red-500', 'ring-inset');
         });
     }
 
     function getEffectiveType(type) {
         if (type in SKIP_TYPES) return 'skip';
-        if (type === 'pending') return isAdmin ? 'pending' : 'empty';
-        if (type === 'vacation' || type === 'removal') return 'vacation';
+        if (type === 'vacation') return 'vacation';
         return 'empty';
     }
 
@@ -290,7 +311,7 @@ function toggleFullWidth() {
         clearSelection();
         var a = from < to ? from : to;
         var b = from < to ? to : from;
-        var ringColor = dragMode === 'vacation' ? 'ring-red-500' : (dragMode === 'pending' ? 'ring-amber-500' : 'ring-blue-500');
+        var ringColor = dragMode === 'vacation' ? 'ring-red-500' : 'ring-blue-500';
         row.querySelectorAll('.cal-cell').forEach(function(el) {
             var d = el.dataset.date;
             if (d >= a && d <= b) {
@@ -331,7 +352,7 @@ function toggleFullWidth() {
         var a = from < to ? from : to;
         var b = from < to ? to : from;
         var display = getUserDisplay(row);
-        var count = countCellsOfTypes(row, from, to, {vacation: 1, removal: 1});
+        var count = countCellsOfTypes(row, from, to, {vacation: 1});
         document.getElementById('rm-user-name').textContent = display;
         document.getElementById('rm-date-range').textContent =
             count === 1 ? a : a + ' to ' + b;
@@ -341,22 +362,6 @@ function toggleFullWidth() {
         document.querySelector('#remove-modal input[name="start_date"]').value = a;
         document.querySelector('#remove-modal input[name="end_date"]').value = b;
         document.getElementById('remove-modal').classList.remove('hidden');
-    }
-
-    function openApproveModal(from, to, uid, row) {
-        var a = from < to ? from : to;
-        var b = from < to ? to : from;
-        var display = getUserDisplay(row);
-        var count = countCellsOfTypes(row, from, to, {pending: 1});
-        document.getElementById('ap-user-name').textContent = display;
-        document.getElementById('ap-date-range').textContent =
-            count === 1 ? a : a + ' to ' + b;
-        document.getElementById('ap-day-count').textContent =
-            count + ' day' + (count !== 1 ? 's' : '');
-        document.querySelectorAll('.ap-form input[name="user_id"]').forEach(function(el) { el.value = uid; });
-        document.querySelectorAll('.ap-form input[name="start_date"]').forEach(function(el) { el.value = a; });
-        document.querySelectorAll('.ap-form input[name="end_date"]').forEach(function(el) { el.value = b; });
-        document.getElementById('approve-modal').classList.remove('hidden');
     }
 
     document.addEventListener('mousedown', function(e) {
@@ -390,9 +395,7 @@ function toggleFullWidth() {
         if (!dragging) return;
         dragging = false;
         if (startDate) {
-            if (dragMode === 'pending') {
-                openApproveModal(startDate, endDate, dragUid, dragRow);
-            } else if (dragMode === 'vacation') {
+            if (dragMode === 'vacation') {
                 openRemoveModal(startDate, endDate, dragUid, dragRow);
             } else {
                 openAddModal(startDate, endDate, dragUid);
@@ -410,7 +413,7 @@ function toggleFullWidth() {
      onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">{{ 'Add Vacation' if is_admin else 'Request Vacation' }}</h2>
+            <h2 class="text-lg font-semibold">Add Vacation</h2>
             <button onclick="document.getElementById('vacation-modal').classList.add('hidden')"
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
         </div>
@@ -421,7 +424,7 @@ function toggleFullWidth() {
                 <select name="user_id" required
                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
                     <option value="">Select user...</option>
-                    {% for uid, uname, udisplay_name, uinitials, ufont in users %}
+                    {% for uid, uname, udisplay_name, uinitials, ufont, udept_id, udept_name in users %}
                     <option value="{{ uid }}">{{ udisplay_name or uname }}</option>
                     {% endfor %}
                 </select>
@@ -446,7 +449,7 @@ function toggleFullWidth() {
                 </button>
                 <button type="submit"
                         class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
-                    {{ 'Add Vacation' if is_admin else 'Request Vacation' }}
+                    Add Vacation
                 </button>
             </div>
         </form>
@@ -458,7 +461,7 @@ function toggleFullWidth() {
      onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">{{ 'Delete Vacation' if is_admin else 'Request Vacation Removal' }}</h2>
+            <h2 class="text-lg font-semibold">Delete Vacation</h2>
             <button onclick="document.getElementById('remove-modal').classList.add('hidden')"
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
         </div>
@@ -467,11 +470,7 @@ function toggleFullWidth() {
             <p><span class="text-gray-500 dark:text-gray-400">Period:</span> <span id="rm-date-range"></span></p>
             <p><span class="text-gray-500 dark:text-gray-400">Vacation days:</span> <span id="rm-day-count"></span></p>
         </div>
-        {% if is_admin %}
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">This will permanently delete the selected vacation days.</p>
-        {% else %}
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">This will send a removal request to your admin for approval.</p>
-        {% endif %}
         <form method="post" action="/vacations/remove-by-dates">
             <input type="hidden" name="user_id" value="">
             <input type="hidden" name="start_date" value="">
@@ -483,54 +482,10 @@ function toggleFullWidth() {
                 </button>
                 <button type="submit"
                         class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg">
-                    {{ 'Delete Vacation' if is_admin else 'Request Removal' }}
+                    Delete Vacation
                 </button>
             </div>
         </form>
     </div>
 </div>
-<!-- Approve Vacation Modal (admin only) -->
-{% if is_admin %}
-<div id="approve-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-     onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">Approve Vacation Request</h2>
-            <button onclick="document.getElementById('approve-modal').classList.add('hidden')"
-                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
-        </div>
-        <div class="mb-4 space-y-2 text-sm">
-            <p><span class="text-gray-500 dark:text-gray-400">User:</span> <strong id="ap-user-name"></strong></p>
-            <p><span class="text-gray-500 dark:text-gray-400">Period:</span> <span id="ap-date-range"></span></p>
-            <p><span class="text-gray-500 dark:text-gray-400">Vacation days:</span> <span id="ap-day-count"></span></p>
-        </div>
-        <div class="flex justify-end space-x-2">
-            <button type="button" onclick="document.getElementById('approve-modal').classList.add('hidden')"
-                    class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
-                Cancel
-            </button>
-            <form method="post" action="/vacations/approve-by-dates" class="inline ap-form">
-                <input type="hidden" name="user_id" value="">
-                <input type="hidden" name="start_date" value="">
-                <input type="hidden" name="end_date" value="">
-                <input type="hidden" name="action" value="reject">
-                <button type="submit"
-                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg">
-                    Reject
-                </button>
-            </form>
-            <form method="post" action="/vacations/approve-by-dates" class="inline ap-form">
-                <input type="hidden" name="user_id" value="">
-                <input type="hidden" name="start_date" value="">
-                <input type="hidden" name="end_date" value="">
-                <input type="hidden" name="action" value="approve">
-                <button type="submit"
-                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg">
-                    Approve
-                </button>
-            </form>
-        </div>
-    </div>
-</div>
-{% endif %}
 {% endblock %}

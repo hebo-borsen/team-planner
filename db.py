@@ -142,7 +142,12 @@ def clear_session_token(user_id):
 def get_all_users():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, display_name, email, role, days_off_per_year, start_date, active FROM users ORDER BY active DESC, username")
+    cursor.execute("""
+        SELECT u.id, u.username, u.display_name, u.email, u.role,
+               u.days_off_per_year, u.start_date, u.active, u.department_id
+        FROM users u
+        ORDER BY u.active DESC, u.username
+    """)
     users = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -224,15 +229,6 @@ def get_vacation_summary(user_id, period_start, period_end):
     """, (user_id, period_start, period_end))
     used = cursor.fetchone()[0]
 
-    cursor.execute("""
-        SELECT COUNT(*) FROM vacation_days vd
-        JOIN team_members tm ON vd.member_id = tm.id
-        JOIN users u ON u.username = tm.name
-        WHERE u.id = %s AND vd.status = 'pending'
-          AND vd.vacation_date BETWEEN %s AND %s
-    """, (user_id, period_start, period_end))
-    pending = cursor.fetchone()[0]
-
     cursor.close()
     conn.close()
 
@@ -247,7 +243,6 @@ def get_vacation_summary(user_id, period_start, period_end):
     return {
         'days_off_per_year': entitlement,
         'used': used,
-        'pending': pending,
         'remaining': entitlement - used,
         'accrued': accrued,
         'accrual_start': accrual_start,
@@ -274,22 +269,12 @@ def get_period_vacation_summary(user_id, period_start, period_end):
     """, (user_id, period_start, period_end))
     used = cursor.fetchone()[0]
 
-    cursor.execute("""
-        SELECT COUNT(*) FROM vacation_days vd
-        JOIN team_members tm ON vd.member_id = tm.id
-        JOIN users u ON u.username = tm.name
-        WHERE u.id = %s AND vd.status = 'pending'
-          AND vd.vacation_date BETWEEN %s AND %s
-    """, (user_id, period_start, period_end))
-    pending = cursor.fetchone()[0]
-
     cursor.close()
     conn.close()
 
     return {
         'days_off_per_year': entitlement,
         'used': used,
-        'pending': pending,
         'remaining': entitlement - used,
     }
 
@@ -300,8 +285,7 @@ def get_all_users_period_summary(period_start, period_end):
     cursor.execute("""
         SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
                u.days_off_per_year, u.start_date,
-               COALESCE(SUM(CASE WHEN vd.status = 'approved' THEN 1 ELSE 0 END), 0) AS used,
-               COALESCE(SUM(CASE WHEN vd.status = 'pending' THEN 1 ELSE 0 END), 0) AS pending
+               COALESCE(SUM(CASE WHEN vd.status = 'approved' THEN 1 ELSE 0 END), 0) AS used
         FROM users u
         LEFT JOIN team_members tm ON tm.name = u.username
         LEFT JOIN vacation_days vd ON tm.id = vd.member_id
@@ -314,10 +298,10 @@ def get_all_users_period_summary(period_start, period_end):
     conn.close()
     # Prorate entitlement per user
     results = []
-    for uid, display_name, base_days, user_start, used, pending in raw:
+    for uid, display_name, base_days, user_start, used in raw:
         base = base_days if base_days is not None else 34
         entitlement = _prorate_entitlement(base, user_start, period_start, period_end)
-        results.append((uid, display_name, entitlement, int(used), int(pending)))
+        results.append((uid, display_name, entitlement, int(used)))
     return results
 
 
@@ -482,7 +466,7 @@ def delete_team_member(member_id):
 # Vacations
 # ---------------------------------------------------------------------------
 
-def add_vacation_for_user(user_id, start_date, end_date, is_admin=False, requested_by=None):
+def add_vacation_for_user(user_id, start_date, end_date, requested_by=None):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
@@ -500,10 +484,7 @@ def add_vacation_for_user(user_id, start_date, end_date, is_admin=False, request
         cursor.execute("INSERT INTO team_members (name, emoji) VALUES (%s, %s)", (username, '👤'))
         conn.commit()
         member_id = cursor.lastrowid
-    if is_admin:
-        status = 'approved'
-    else:
-        status = 'pending'
+    status = 'approved'
     cursor.execute(
         "SELECT holiday_date FROM period_holidays WHERE enabled = TRUE AND holiday_date BETWEEN %s AND %s",
         (start_date, end_date)
@@ -522,8 +503,7 @@ def add_vacation_for_user(user_id, start_date, end_date, is_admin=False, request
                    (member_id, vacation_date, status, requested_by, approved_by, approved_at)
                    VALUES (%s, %s, %s, %s, %s, %s)""",
                 (member_id, current, status, requested_by,
-                 requested_by if is_admin else None,
-                 datetime.now() if is_admin else None)
+                 requested_by, datetime.now())
             )
             added += 1
         except mysql.connector.IntegrityError:
@@ -623,219 +603,19 @@ def delete_vacation(vacation_id):
     conn.close()
 
 
-def get_pending_requests():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT vd.id, COALESCE(u.display_name, u.username) as display,
-               vd.vacation_date, vd.status, vd.requested_by, vd.created_at
-        FROM vacation_days vd
-        JOIN team_members tm ON vd.member_id = tm.id
-        LEFT JOIN users u ON u.username = tm.name
-        WHERE vd.status IN ('pending', 'pending_removal')
-        ORDER BY vd.created_at, vd.vacation_date
-    """)
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return rows
-
-
-def get_pending_requests_grouped():
-    """Group pending requests by user+status+created_at (same form submission)."""
-    rows = get_pending_requests()
-    groups = []
-    current = None
-    for vid, display, vdate, status, req_by, created_at in rows:
-        if (current and current['display'] == display
-                and current['status'] == status
-                and current['created_at'] == created_at):
-            current['ids'].append(vid)
-            current['dates'].append(vdate)
-            current['end_date'] = vdate
-            current['count'] += 1
-        else:
-            if current:
-                groups.append(current)
-            current = {
-                'ids': [vid],
-                'dates': [vdate],
-                'display': display,
-                'start_date': vdate,
-                'end_date': vdate,
-                'status': status,
-                'req_by': req_by,
-                'created_at': created_at,
-                'count': 1,
-            }
-    if current:
-        groups.append(current)
-    return groups
-
-
-def approve_vacation_bulk(vacation_day_ids, approved_by_username):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    now = datetime.now()
-    for vid in vacation_day_ids:
-        cursor.execute("SELECT status FROM vacation_days WHERE id = %s", (vid,))
-        row = cursor.fetchone()
-        if not row:
-            continue
-        if row[0] == 'pending':
-            cursor.execute(
-                "UPDATE vacation_days SET status = 'approved', approved_by = %s, approved_at = %s WHERE id = %s",
-                (approved_by_username, now, vid))
-        elif row[0] == 'pending_removal':
-            cursor.execute("DELETE FROM vacation_days WHERE id = %s", (vid,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
-def reject_vacation_bulk(vacation_day_ids):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    for vid in vacation_day_ids:
-        cursor.execute("SELECT status FROM vacation_days WHERE id = %s", (vid,))
-        row = cursor.fetchone()
-        if not row:
-            continue
-        if row[0] == 'pending':
-            cursor.execute("DELETE FROM vacation_days WHERE id = %s", (vid,))
-        elif row[0] == 'pending_removal':
-            cursor.execute("UPDATE vacation_days SET status = 'approved' WHERE id = %s", (vid,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
-def get_pending_count():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM vacation_days WHERE status IN ('pending', 'pending_removal')")
-    count = cursor.fetchone()[0]
-    cursor.close()
-    conn.close()
-    return count
-
-
-def approve_vacation(vacation_day_id, approved_by_username):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT status FROM vacation_days WHERE id = %s", (vacation_day_id,))
-    row = cursor.fetchone()
-    if not row:
-        cursor.close()
-        conn.close()
-        return False
-    status = row[0]
-    if status == 'pending':
-        cursor.execute(
-            "UPDATE vacation_days SET status = 'approved', approved_by = %s, approved_at = %s WHERE id = %s",
-            (approved_by_username, datetime.now(), vacation_day_id)
-        )
-    elif status == 'pending_removal':
-        cursor.execute("DELETE FROM vacation_days WHERE id = %s", (vacation_day_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return True
-
-
-def reject_vacation(vacation_day_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT status FROM vacation_days WHERE id = %s", (vacation_day_id,))
-    row = cursor.fetchone()
-    if not row:
-        cursor.close()
-        conn.close()
-        return False
-    status = row[0]
-    if status == 'pending':
-        cursor.execute("DELETE FROM vacation_days WHERE id = %s", (vacation_day_id,))
-    elif status == 'pending_removal':
-        cursor.execute(
-            "UPDATE vacation_days SET status = 'approved' WHERE id = %s",
-            (vacation_day_id,)
-        )
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return True
-
-
-def request_vacation_removal(vacation_day_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT status FROM vacation_days WHERE id = %s", (vacation_day_id,))
-    row = cursor.fetchone()
-    if not row:
-        cursor.close()
-        conn.close()
-        return False, "Vacation day not found."
-    if row[0] == 'pending_removal':
-        cursor.close()
-        conn.close()
-        return False, "Removal already requested."
-    if row[0] != 'approved':
-        cursor.close()
-        conn.close()
-        return False, "Can only request removal of approved vacation."
-    cursor.execute(
-        "UPDATE vacation_days SET status = 'pending_removal' WHERE id = %s",
-        (vacation_day_id,)
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return True, "Removal requested."
-
-
-def cancel_pending_request(vacation_day_id, username):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "DELETE FROM vacation_days WHERE id = %s AND status = 'pending' AND requested_by = %s",
-        (vacation_day_id, username)
-    )
-    deleted = cursor.rowcount > 0
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return deleted
-
-
-def get_user_vacations(user_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT vd.id, vd.vacation_date, vd.status, vd.requested_by, vd.approved_by
-        FROM vacation_days vd
-        JOIN team_members tm ON vd.member_id = tm.id
-        JOIN users u ON u.username = tm.name
-        WHERE u.id = %s
-        ORDER BY vd.vacation_date
-    """, (user_id,))
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return rows
 
 
 def get_user_vacations_grouped(user_id):
-    """Group a user's vacations into periods by status + created_at."""
+    """Group a user's vacations into consecutive periods by created_at."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT vd.id, vd.vacation_date, vd.status, vd.requested_by,
-               vd.approved_by, vd.created_at
+        SELECT vd.id, vd.vacation_date, vd.created_at
         FROM vacation_days vd
         JOIN team_members tm ON vd.member_id = tm.id
         JOIN users u ON u.username = tm.name
         WHERE u.id = %s
-        ORDER BY vd.status, vd.created_at, vd.vacation_date
+        ORDER BY vd.created_at, vd.vacation_date
     """, (user_id,))
     rows = cursor.fetchall()
     cursor.close()
@@ -843,9 +623,8 @@ def get_user_vacations_grouped(user_id):
 
     groups = []
     current = None
-    for vid, vdate, status, req_by, approved_by, created_at in rows:
-        if (current and current['status'] == status
-                and current['created_at'] == created_at):
+    for vid, vdate, created_at in rows:
+        if current and current['created_at'] == created_at:
             current['ids'].append(vid)
             current['dates'].append(vdate)
             current['end_date'] = vdate
@@ -856,11 +635,8 @@ def get_user_vacations_grouped(user_id):
             current = {
                 'ids': [vid],
                 'dates': [vdate],
-                'status': status,
                 'start_date': vdate,
                 'end_date': vdate,
-                'req_by': req_by,
-                'approved_by': approved_by,
                 'created_at': created_at,
                 'count': 1,
             }
@@ -870,23 +646,6 @@ def get_user_vacations_grouped(user_id):
     # Sort by start_date so periods appear chronologically
     groups.sort(key=lambda g: g['start_date'])
     return groups
-
-
-def request_vacation_removal_bulk(ids):
-    """Mark multiple approved vacation days as pending_removal."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    fmt = ','.join(['%s'] * len(ids))
-    cursor.execute(
-        f"UPDATE vacation_days SET status = 'pending_removal' "
-        f"WHERE id IN ({fmt}) AND status = 'approved'",
-        tuple(ids)
-    )
-    updated = cursor.rowcount
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return updated
 
 
 def delete_vacation_bulk(ids):
@@ -929,22 +688,6 @@ def get_vacation_ids_for_user_dates(user_id, start_date, end_date, statuses=None
     conn.close()
     return ids
 
-
-def cancel_pending_request_bulk(ids, username):
-    """Cancel multiple pending vacation requests."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    fmt = ','.join(['%s'] * len(ids))
-    cursor.execute(
-        f"DELETE FROM vacation_days WHERE id IN ({fmt}) "
-        f"AND status = 'pending' AND requested_by = %s",
-        tuple(ids) + (username,)
-    )
-    deleted = cursor.rowcount
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return deleted
 
 
 # ---------------------------------------------------------------------------
@@ -1092,7 +835,14 @@ def set_event_response(event_id, member_id, is_attending):
 def get_all_users_for_calendar():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, display_name, initials, font FROM users WHERE active = TRUE ORDER BY username")
+    cursor.execute("""
+        SELECT u.id, u.username, u.display_name, u.initials, u.font,
+               u.department_id, d.name AS dept_name
+        FROM users u
+        LEFT JOIN departments d ON u.department_id = d.id
+        WHERE u.active = TRUE
+        ORDER BY d.sort_order, d.name, u.username
+    """)
     users = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -1252,3 +1002,350 @@ def get_event_responses(event_id):
     cursor.close()
     conn.close()
     return responses
+
+
+# Review requests
+
+def create_review_request(title, start_date, end_date, created_by, department_id=None, color='#f59e0b'):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO review_requests (title, start_date, end_date, created_by, department_id, color) VALUES (%s, %s, %s, %s, %s, %s)",
+        (title, start_date, end_date, created_by, department_id, color))
+    conn.commit()
+    new_id = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return new_id
+
+
+def get_all_review_requests():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT rr.id, rr.title, rr.start_date, rr.end_date, rr.created_by, rr.active, rr.created_at,
+               COALESCE(u.display_name, u.username) AS creator_name,
+               rr.department_id, d.name AS dept_name, rr.color
+        FROM review_requests rr
+        LEFT JOIN users u ON u.id = rr.created_by
+        LEFT JOIN departments d ON d.id = rr.department_id
+        ORDER BY rr.start_date ASC
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+
+def update_review_request_color(request_id, color):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE review_requests SET color = %s WHERE id = %s", (color, request_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def get_all_review_requests_for_grid():
+    """Return all review requests (active and inactive) with color for grid display."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, title, start_date, end_date, department_id, color, active
+        FROM review_requests
+        ORDER BY created_at DESC
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+
+def get_active_review_requests():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, title, start_date, end_date, department_id, color
+        FROM review_requests
+        WHERE active = TRUE
+        ORDER BY created_at DESC
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+
+def get_pending_review_requests_for_user(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # Only show reviews for the user's department (or reviews with no department)
+    cursor.execute("""
+        SELECT rr.id, rr.title, rr.start_date, rr.end_date, rr.color
+        FROM review_requests rr
+        WHERE rr.active = TRUE
+          AND (rr.department_id IS NULL OR rr.department_id = (
+              SELECT department_id FROM users WHERE id = %s
+          ))
+          AND NOT EXISTS (
+            SELECT 1 FROM review_responses resp
+            WHERE resp.request_id = rr.id AND resp.user_id = %s
+              AND resp.decided_at IS NOT NULL
+          )
+        ORDER BY rr.created_at DESC
+    """, (user_id, user_id))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+
+def mark_review_seen(request_id, user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO review_responses (request_id, user_id, seen_at)
+        VALUES (%s, %s, NOW())
+        ON DUPLICATE KEY UPDATE seen_at = COALESCE(seen_at, NOW())
+    """, (request_id, user_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def mark_review_decided(request_id, user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO review_responses (request_id, user_id, seen_at, decided_at)
+        VALUES (%s, %s, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE decided_at = NOW(), seen_at = COALESCE(seen_at, NOW())
+    """, (request_id, user_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def undo_review_decided(request_id, user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE review_responses SET decided_at = NULL WHERE request_id = %s AND user_id = %s",
+        (request_id, user_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def get_signed_off_reviews_for_user(user_id):
+    """Return active review requests that this user has signed off on."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT rr.id, rr.title, rr.start_date, rr.end_date, rr.color, resp.decided_at
+        FROM review_requests rr
+        JOIN review_responses resp ON resp.request_id = rr.id AND resp.user_id = %s
+        WHERE rr.active = TRUE AND resp.decided_at IS NOT NULL
+          AND (rr.department_id IS NULL OR rr.department_id = (
+              SELECT department_id FROM users WHERE id = %s
+          ))
+        ORDER BY rr.start_date ASC
+    """, (user_id, user_id))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+
+def get_review_request_status(request_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # If review is department-scoped, only show users in that department
+    cursor.execute("SELECT department_id FROM review_requests WHERE id = %s", (request_id,))
+    rr = cursor.fetchone()
+    dept_id = rr[0] if rr else None
+    if dept_id:
+        cursor.execute("""
+            SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
+                   resp.seen_at, resp.decided_at
+            FROM users u
+            LEFT JOIN review_responses resp ON resp.user_id = u.id AND resp.request_id = %s
+            WHERE u.active = TRUE AND u.department_id = %s
+            ORDER BY COALESCE(u.display_name, u.username)
+        """, (request_id, dept_id))
+    else:
+        cursor.execute("""
+            SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
+                   resp.seen_at, resp.decided_at
+            FROM users u
+            LEFT JOIN review_responses resp ON resp.user_id = u.id AND resp.request_id = %s
+            WHERE u.active = TRUE
+            ORDER BY COALESCE(u.display_name, u.username)
+        """, (request_id,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+
+def get_review_signoff_user_ids():
+    """Return a dict mapping review_request id -> set of user_ids who have signed off."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT resp.request_id, resp.user_id
+        FROM review_responses resp
+        JOIN review_requests rr ON rr.id = resp.request_id
+        WHERE rr.active = TRUE AND resp.decided_at IS NOT NULL
+    """)
+    result = {}
+    for req_id, uid in cursor.fetchall():
+        result.setdefault(req_id, set()).add(uid)
+    cursor.close()
+    conn.close()
+    return result
+
+
+def toggle_review_request_active(request_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE review_requests SET active = NOT active WHERE id = %s",
+        (request_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def delete_review_request(request_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM review_requests WHERE id = %s", (request_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Departments
+# ---------------------------------------------------------------------------
+
+def get_all_departments():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, sort_order FROM departments ORDER BY sort_order, name")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+
+def create_department(name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO departments (name) VALUES (%s)", (name,))
+        conn.commit()
+        return True, "Department created."
+    except mysql.connector.IntegrityError:
+        return False, "A department with that name already exists."
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def delete_department(department_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET department_id = NULL WHERE department_id = %s", (department_id,))
+    cursor.execute("DELETE FROM departments WHERE id = %s", (department_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def update_department_name(department_id, name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE departments SET name = %s WHERE id = %s", (name, department_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def set_user_department(user_id, department_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET department_id = %s WHERE id = %s",
+                   (department_id if department_id else None, user_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def get_visible_departments(user_id):
+    """Return set of department IDs the user has chosen to see. Empty = see all."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT department_id FROM user_visible_departments WHERE user_id = %s",
+                   (user_id,))
+    ids = {row[0] for row in cursor.fetchall()}
+    cursor.close()
+    conn.close()
+    return ids
+
+
+def set_visible_departments(user_id, department_ids):
+    """Replace visible departments for a user. Empty list = see all."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM user_visible_departments WHERE user_id = %s", (user_id,))
+    for did in department_ids:
+        cursor.execute(
+            "INSERT INTO user_visible_departments (user_id, department_id) VALUES (%s, %s)",
+            (user_id, did))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def toggle_visible_department(user_id, department_id):
+    """Toggle a single department's visibility for a user.
+
+    If the user currently sees all (no rows), populate with all departments
+    minus the toggled one. Otherwise, add or remove the single entry.
+    If the result would be all departments visible, clear the table instead.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check current state
+    cursor.execute("SELECT department_id FROM user_visible_departments WHERE user_id = %s",
+                   (user_id,))
+    current = {row[0] for row in cursor.fetchall()}
+
+    cursor.execute("SELECT id FROM departments")
+    all_ids = {row[0] for row in cursor.fetchall()}
+
+    if not current:
+        # Currently seeing all — hide the clicked one by adding all others
+        new_visible = all_ids - {department_id}
+    elif department_id in current:
+        # Currently visible — remove it
+        new_visible = current - {department_id}
+    else:
+        # Currently hidden — add it
+        new_visible = current | {department_id}
+
+    # If result equals all departments, clear to "see all" mode
+    if new_visible == all_ids:
+        new_visible = set()
+
+    cursor.execute("DELETE FROM user_visible_departments WHERE user_id = %s", (user_id,))
+    for did in new_visible:
+        cursor.execute(
+            "INSERT INTO user_visible_departments (user_id, department_id) VALUES (%s, %s)",
+            (user_id, did))
+    conn.commit()
+    cursor.close()
+    conn.close()

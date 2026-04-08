@@ -6,6 +6,10 @@ tr.cal-hover td:hover::after {
     background-color: rgba(0,0,0,0.12); pointer-events: none; border-radius: 2px;
 }
 .dark tr.cal-hover td:hover::after { background-color: rgba(255,255,255,0.10); }
+.review-tri { position: absolute; bottom: 0; left: 0; width: 10px; height: 10px;
+    pointer-events: none; clip-path: polygon(0 0, 0 100%, 100% 100%); }
+.review-tick { position: absolute; bottom: 0; right: 0; width: 10px; height: 10px;
+    pointer-events: none; }
 </style>
 <div class="overflow-x-auto">
     <table class="min-w-full text-sm border border-gray-200 dark:border-gray-700">
@@ -44,7 +48,16 @@ tr.cal-hover td:hover::after {
             </tr>
         </thead>
         <tbody>
-            {% for uid, uname, udisplay_name, uinitials, ufont in users %}
+            {% for dept in dept_groups %}
+            {% if dept_groups|length > 1 or dept.id %}
+            <tr>
+                <td colspan="{{ days|length + 1 }}"
+                    class="px-3 py-2 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 sticky left-0 z-10">
+                    {{ dept.name }}
+                </td>
+            </tr>
+            {% endif %}
+            {% for uid, uname, udisplay_name, uinitials, ufont, udept_id, udept_name in dept.users %}
             {% set display = udisplay_name or uname %}
             {% set selectable = is_admin or uid == user_id %}
             <tr class="{{ 'cal-row cal-hover' if selectable else '' }}" data-uid="{{ uid }}">
@@ -53,24 +66,23 @@ tr.cal-hover td:hover::after {
                     {{ display }}
                 </td>
                 {% set user_vacs = vacation_dict.get(display, []) %}
-                {% set user_pending = pending_dict.get(display, []) %}
-                {% set user_removal = removal_dict.get(display, []) %}
+                {% set u_cells = user_review_cells.get(uid, {}) %}
                 {% for day in days %}
-                {% set cell_type = 'removal' if day in user_removal else ('pending' if day in user_pending else ('vacation' if day in user_vacs else ('weekend' if day in weekend_days else ('holiday' if day in holiday_dict else 'empty')))) %}
+                {% set cell_type = 'vacation' if day in user_vacs else ('weekend' if day in weekend_days else ('holiday' if day in holiday_dict else 'empty')) %}
+                {% set rc = u_cells.get(day) %}
                 <td class="{{ 'cal-cell' if selectable else '' }} px-1 py-1.5 text-center border border-gray-200 dark:border-gray-700
                     {{ 'cursor-pointer' if selectable else '' }}
                     {{ 'bg-gray-200 dark:bg-gray-700' if day in weekend_days else '' }}
-                    {{ 'bg-green-100 dark:bg-green-900/30' if day in holiday_dict and day not in weekend_days and day not in user_vacs and day not in user_pending and day not in user_removal else '' }}
-                    {{ 'bg-blue-500 text-white font-bold' if day in user_vacs and day not in user_removal else '' }}
-                    {{ 'bg-amber-300 dark:bg-amber-600 text-amber-900 dark:text-amber-100 font-bold' if day in user_pending else '' }}
-                    {{ 'bg-blue-500 text-white font-bold ring-2 ring-red-500 ring-inset' if day in user_removal else '' }}"
-                    data-date="{{ day.isoformat() }}" data-type="{{ cell_type }}"
-                    {% if day in user_pending %}title="Pending approval"{% endif %}
-                    {% if day in user_removal %}title="Removal requested"{% endif %}>
-                    {{ 'V' if day in user_vacs and day not in user_removal else '' }}{{ '?' if day in user_pending else '' }}{{ 'V' if day in user_removal else '' }}
+                    {{ 'bg-green-100 dark:bg-green-900/30' if day in holiday_dict and day not in weekend_days and day not in user_vacs else '' }}
+                    {{ 'bg-blue-500 text-white font-bold' if day in user_vacs else '' }}
+                    {{ 'relative' if rc and day not in weekend_days and day not in holiday_dict else '' }}"
+                    data-date="{{ day.isoformat() }}" data-type="{{ cell_type }}">
+                    {{ 'V' if day in user_vacs else '' }}
+                    {% if rc and day not in weekend_days and day not in holiday_dict %}{% if rc[2] %}<svg class="review-tick" viewBox="0 0 10 10" style="opacity:{{ rc[1] }}"><path d="M2 5.5L4.5 8L8.5 2.5" stroke="{{ rc[0] }}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>{% else %}<span class="review-tri" style="background:{{ rc[0] }};opacity:{{ rc[1] }}"></span>{% endif %}{% endif %}
                 </td>
                 {% endfor %}
             </tr>
+            {% endfor %}
             {% endfor %}
         </tbody>
         <tfoot>

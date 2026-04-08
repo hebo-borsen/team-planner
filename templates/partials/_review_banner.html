@@ -1,0 +1,69 @@
+{% for rr_id, rr_title, rr_start, rr_end, rr_color in pending_reviews %}
+<div class="rounded-lg p-4 border" style="background:{{ rr_color }}10;border-color:{{ rr_color }}50"
+     id="review-banner-{{ rr_id }}">
+    <div hx-post="/review-requests/{{ rr_id }}/seen"
+         hx-trigger="load" hx-swap="none" class="hidden"></div>
+    <div class="flex items-center justify-between mb-3">
+        <div>
+            <div class="font-semibold" style="color:{{ rr_color }}">
+                {{ rr_title }}
+            </div>
+            <div class="text-sm text-gray-600 dark:text-gray-300">
+                Please verify your holidays are correct for
+                {{ rr_start|fmtdate }} &ndash; {{ rr_end|fmtdate }}
+            </div>
+        </div>
+        <form method="post" action="/review-requests/{{ rr_id }}/sign-off" class="inline">
+            <button type="submit"
+                    class="px-4 py-2 text-white rounded-lg whitespace-nowrap ml-4 text-left hover:brightness-110"
+                    style="background:{{ rr_color }}">
+                <span class="text-sm font-medium">Sign Off</span><br>
+                <span class="block text-[10px] opacity-80 font-normal leading-none">I solemnly swear that I have marked<br>all holiday plans in this given period</span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Mini calendar -->
+    {% set first_monday = rr_start.toordinal() - rr_start.weekday() %}
+    {% set last_sunday = rr_end.toordinal() + (6 - rr_end.weekday()) %}
+    <table class="text-xs w-auto">
+        <thead>
+            <tr style="color:{{ rr_color }}80">
+                <th class="px-1.5 py-0.5 font-medium">Mon</th>
+                <th class="px-1.5 py-0.5 font-medium">Tue</th>
+                <th class="px-1.5 py-0.5 font-medium">Wed</th>
+                <th class="px-1.5 py-0.5 font-medium">Thu</th>
+                <th class="px-1.5 py-0.5 font-medium">Fri</th>
+                <th class="px-1.5 py-0.5 font-medium" style="color:{{ rr_color }}40">Sat</th>
+                <th class="px-1.5 py-0.5 font-medium" style="color:{{ rr_color }}40">Sun</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for week_start_ord in range(first_monday, last_sunday + 1, 7) %}
+            <tr>
+                {% for dow in range(7) %}
+                {% set day_ord = week_start_ord + dow %}
+                {% set day_date = rr_start.fromordinal(day_ord) %}
+                {% set in_range = day_date >= rr_start and day_date <= rr_end %}
+                {% set is_holiday = day_date in holidays %}
+                {% set is_weekend = dow >= 5 %}
+                <td class="px-1.5 py-1 text-center rounded
+                    {% if in_range and not is_weekend and not is_holiday %}
+                        text-white font-semibold
+                    {% elif in_range and is_holiday %}
+                        bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400
+                    {% elif is_weekend %}
+                        opacity-30
+                    {% elif not in_range %}
+                        opacity-40
+                    {% endif %}"
+                    {% if in_range and not is_weekend and not is_holiday %}style="background:{{ rr_color }}"{% endif %}>
+                    {{ day_date.day }}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
