@@ -124,7 +124,12 @@ function toggleFullWidth() {
     </p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ (vacation_summary.accrued - vacation_summary.used)|round(1) }}</div>
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ period_summary.remaining|round|int }}{% if period_summary.remaining != period_summary.remaining|round|int %} <span class="text-xs font-normal text-gray-400 dark:text-gray-500">(rounded from {{ period_summary.remaining }})</span>{% endif %}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Projected remaining holiday days in period</div>
+        </div>
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            {% set available_exact = (vacation_summary.accrued - vacation_summary.used)|round(1) %}
+            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ available_exact|round|int }}{% if available_exact != available_exact|round|int %} <span class="text-xs font-normal text-gray-400 dark:text-gray-500">(rounded from {{ available_exact }})</span>{% endif %}</div>
             <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">Holiday days available as of <strong>{{ today|fmtdate }}</strong></div>
             <div class="text-xs text-gray-400 dark:text-gray-500 space-y-0.5 border-t border-gray-200 dark:border-gray-600 pt-2">
                 <div class="flex justify-between"><span>Earned:</span> <span>{{ vacation_summary.accrued }}</span></div>
@@ -143,29 +148,55 @@ function toggleFullWidth() {
                 {% endif %}
             </div>
         </div>
+
+        {% if monthly_chart %}
         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <div class="text-sm text-gray-600 dark:text-gray-300 space-y-1.5">
-                <div class="flex justify-between">
-                    <span class="text-gray-500 dark:text-gray-400">Remaining holiday days in period:</span>
-                    <span class="font-semibold">{{ period_summary.remaining }}</span>
+            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400">Days off per month</h3>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mb-3">Historical and projected</p>
+            {% set bar_max = [suggested_per_month] %}
+            {% for m in monthly_chart %}
+                {% set bar_val = m.used if (m.is_past or m.is_current) else suggested_per_month %}
+                {% if bar_val > bar_max[0] %}{% set _ = bar_max.pop() %}{% set _ = bar_max.append(bar_val) %}{% endif %}
+            {% endfor %}
+            {% set bmax = bar_max[0] if bar_max[0] > 0 else 1 %}
+            <div class="relative">
+                <div class="flex items-end gap-px" style="height: 100px;">
+                    {% for m in monthly_chart %}
+                    {% set bar_val = m.used if (m.is_past or m.is_current) else suggested_per_month %}
+                    <div class="flex-1 flex flex-col items-center h-full justify-end">
+                        {% if bar_val > 0 %}
+                        <span class="text-[9px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">{{ bar_val|round|int }}</span>
+                        {% endif %}
+                        <div class="w-full" style="height: {{ (bar_val / bmax * 100)|round }}%;">
+                            {% if m.is_future %}
+                            <div class="w-full h-full rounded-t bg-gray-300 dark:bg-gray-600"></div>
+                            {% else %}
+                            <div class="w-full h-full rounded-t bg-blue-400 dark:bg-blue-500"></div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-500 dark:text-gray-400">Months remaining in holiday period:</span>
-                    <span class="font-semibold">{{ period_summary.months_left }}</span>
-                </div>
-                <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1.5">
-                    <span class="text-gray-500 dark:text-gray-400">Avg days/month needed:</span>
-                    <span class="font-bold {{ 'text-red-600 dark:text-red-400' if period_summary.avg_per_month > 5.5 else '' }}">{{ period_summary.avg_per_month }}</span>
-                </div>
+                {% set future_count = monthly_chart|selectattr('is_future')|list|length %}
+                {% if future_count > 0 %}
+                {% set total_count = monthly_chart|length %}
+                {% set past_count = total_count - future_count %}
+                <div class="absolute right-0 border-t-2 border-dashed border-amber-400 dark:border-amber-500 pointer-events-none" style="bottom: {{ (suggested_per_month / bmax * 100)|round }}%; width: {{ (future_count / total_count * 100)|round }}%;"></div>
+                {% endif %}
             </div>
-            <div class="text-xs text-gray-400 dark:text-gray-500 mt-2">To avoid backloading all your holiday days.</div>
+            <div class="flex gap-px mt-1">
+                {% for m in monthly_chart %}
+                <div class="flex-1 text-center text-[9px] text-gray-400 dark:text-gray-500 leading-tight">{{ m.label }}</div>
+                {% endfor %}
+            </div>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] text-gray-400 dark:text-gray-500">
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-blue-400 dark:bg-blue-500"></span> Used</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-gray-300 dark:bg-gray-600"></span> Suggested</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-0 border-t border-dashed border-amber-400 dark:border-amber-500"></span> {{ suggested_per_month }}/mo</span>
+            </div>
         </div>
-        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ period_summary.used }}</div>
-            <div class="text-sm text-gray-500 dark:text-gray-400">Days used</div>
-        </div>
+        {% endif %}
     </div>
-    <p class="text-xs text-gray-400 dark:text-gray-500 mt-3">Earned days are recalculated monthly. If your start date is after the period start, accrual begins from your start date.</p>
 </div>
 {% endif %}
 

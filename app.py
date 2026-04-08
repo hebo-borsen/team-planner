@@ -87,6 +87,7 @@ def login_required(f):
                     session['role'] = user[4] or 'user'
                     session['initials'] = user[5] or user[1]
                     session['font'] = user[6] or ''
+                    session['email'] = user[7] or ''
                     session['needs_initial_accrued'] = db.needs_initial_accrued(user[0])
                     session['department_id'] = db.get_user_department_id(user[0])
                 else:
@@ -126,6 +127,13 @@ def inject_globals():
             current_dept_name = dname
         if did == user_dept_id:
             is_fun_dept = bool(dfun)
+    user_email = session.get('email')
+    if not user_email and session.get('user_id'):
+        profile = db.get_user_profile(session['user_id'])
+        if profile:
+            user_email = profile[1] or ''
+            session['email'] = user_email
+    user_email = user_email or ''
     return {
         'theme': session.get('theme', 'light'),
         'user_id': session.get('user_id'),
@@ -133,6 +141,7 @@ def inject_globals():
         'initials': session.get('initials', session.get('username', '')),
         'user_font': session.get('font', ''),
         'is_admin': is_admin,
+        'is_superuser': user_email == 'zeth.odderskov@borsen.dk',
         'active_tab': request.endpoint or '',
         'nav_departments': all_departments,
         'nav_current_dept_id': current_dept_id,
@@ -164,6 +173,7 @@ def login():
             session['role'] = user[4] or 'user'
             session['initials'] = user[5] or user[1]
             session['font'] = user[6] or ''
+            session['email'] = user[7] or ''
             session['needs_initial_accrued'] = db.needs_initial_accrued(user[0])
             session['department_id'] = db.get_user_department_id(user[0])
             token = db.create_session_token(user[0])
@@ -343,7 +353,7 @@ def calendar_view(dept_id):
         dept_groups.append({'id': dept_id, 'name': dept_name, 'users': list(users)})
 
     vacations_data = db.get_vacations_for_date_range(start_date, end_date)
-    holidays_data = db.get_holidays_for_date_range(start_date, end_date, department_id=dept_id)
+    holidays_data = db.get_holidays_for_date_range(start_date, end_date)
 
     days = []
     current = start_date
@@ -402,11 +412,39 @@ def calendar_view(dept_id):
         vacation_summary = {'days_off_per_year': 34, 'used': 0,
                             'remaining': 34, 'accrued': 0}
 
+    # Build monthly bar chart data for the period
+    monthly_chart = []
+    if period_start and period_end_date and period_summary:
+        usage_by_month = db.get_vacation_days_per_month(
+            session['user_id'], period_start, period_end_date)
+        suggested = round(period_summary['remaining'] / period_summary['months_left'], 1)
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        d = date(period_start.year, period_start.month, 1)
+        end_m = date(period_end_date.year, period_end_date.month, 1)
+        while d <= end_m:
+            used_m = usage_by_month.get((d.year, d.month), 0)
+            is_past = (d.year < today.year) or (d.year == today.year and d.month < today.month)
+            is_current = (d.year == today.year and d.month == today.month)
+            monthly_chart.append({
+                'label': month_names[d.month - 1],
+                'year': d.year,
+                'used': used_m,
+                'is_past': is_past,
+                'is_current': is_current,
+                'is_future': not is_past and not is_current,
+            })
+            if d.month == 12:
+                d = date(d.year + 1, 1, 1)
+            else:
+                d = date(d.year, d.month + 1, 1)
+
+
     # Review period requests (banner only on user's own department)
     pending_reviews = db.get_pending_review_requests_for_user(session['user_id']) if viewing_own_dept else []
     all_grid_reviews = db.get_all_review_requests_for_grid()
     signoff_map = db.get_review_signoff_user_ids()  # {request_id: {user_ids}}
-    all_holidays = db.get_all_enabled_holidays(department_id=dept_id) if pending_reviews else set()
+    all_holidays = db.get_all_enabled_holidays() if pending_reviews else set()
 
     # Build per-user review cell info: user_review_cells[uid][date] = (color, opacity, signed)
     # Priority: active+pending > active+signed > inactive (higher priority wins)
@@ -467,6 +505,8 @@ def calendar_view(dept_id):
         'period_summary': period_summary if viewing_own_dept else None,
         'period_label': period_label,
         'period_end_date': period_end_date,
+        'monthly_chart': monthly_chart,
+        'suggested_per_month': suggested if monthly_chart else 0,
         'admin_summaries': admin_summaries,
         'pending_reviews': pending_reviews,
         'holidays': all_holidays,
@@ -575,7 +615,7 @@ def export_vacations():
 @login_required
 def my_vacations():
     groups = db.get_user_vacations_grouped(session['user_id'])
-    holidays = db.get_all_enabled_holidays(department_id=session.get('department_id'))
+    holidays = db.get_all_enabled_holidays()
     signed_reviews = db.get_signed_off_reviews_for_user(session['user_id'])
     return render_template('my_vacations.html', groups=groups,
                            holidays=holidays, signed_reviews=signed_reviews,
@@ -742,6 +782,7 @@ def update_profile():
     db.update_user_profile(session['user_id'], email, display_name, initials, font)
     session['initials'] = initials or session.get('username', '')
     session['font'] = font or ''
+    session['email'] = email or ''
     flash('Profile updated!', 'success')
     return redirect(url_for('profile'))
 
@@ -869,16 +910,11 @@ def admin_change_password(user_id):
 @admin_required
 def settings():
     dept_id = session.get('viewing_department_id') or session.get('department_id')
-    periods = db.get_holiday_periods()
-    period_id = request.args.get('period_id', type=int) or db.get_current_period_id()
-    holidays = db.get_period_holidays(period_id, department_id=dept_id) if period_id else []
     review_requests = db.get_all_review_requests(department_id=dept_id)
     departments = db.get_all_departments()
-    return render_template('settings.html', periods=periods,
-                           selected_period_id=period_id, holidays=holidays,
+    return render_template('settings.html',
                            review_requests=review_requests,
                            departments=departments,
-                           holiday_dept_id=dept_id,
                            active_tab='settings', today=date.today())
 
 
@@ -886,24 +922,32 @@ def settings():
 @admin_required
 def settings_holidays():
     period_id = request.args.get('period_id', type=int)
-    dept_id = request.args.get('department_id', type=int)
-    if dept_id is None:
-        dept_id = session.get('viewing_department_id') or session.get('department_id')
-    holidays = db.get_period_holidays(period_id, department_id=dept_id) if period_id else []
+    holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
-                           holiday_dept_id=dept_id,
                            today=date.today())
 
 
 @app.route('/settings/holidays/<int:holiday_id>/toggle', methods=['POST'])
 @admin_required
 def toggle_holiday(holiday_id):
-    period_id, department_id = db.toggle_period_holiday(holiday_id)
-    holidays = db.get_period_holidays(period_id, department_id=department_id) if period_id else []
+    period_id = db.toggle_period_holiday(holiday_id)
+    holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
-                           holiday_dept_id=department_id,
+                           today=date.today())
+
+
+@app.route('/settings/holidays/<int:holiday_id>/name', methods=['POST'])
+@admin_required
+def update_holiday_name(holiday_id):
+    new_name = request.form.get('name', '').strip()
+    if not new_name:
+        return '', 400
+    period_id = db.update_period_holiday_name(holiday_id, new_name)
+    holidays = db.get_period_holidays(period_id) if period_id else []
+    return render_template('partials/_period_holidays.html',
+                           holidays=holidays, selected_period_id=period_id,
                            today=date.today())
 
 
@@ -913,11 +957,10 @@ def update_holiday_date(holiday_id):
     new_date = request.form.get('holiday_date')
     if not new_date:
         return '', 400
-    period_id, department_id = db.update_period_holiday_date(holiday_id, date.fromisoformat(new_date))
-    holidays = db.get_period_holidays(period_id, department_id=department_id) if period_id else []
+    period_id = db.update_period_holiday_date(holiday_id, date.fromisoformat(new_date))
+    holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
-                           holiday_dept_id=department_id,
                            today=date.today())
 
 
@@ -927,24 +970,21 @@ def add_period_holiday():
     period_id = request.form.get('period_id', type=int)
     name = request.form.get('name', '').strip()
     holiday_date = request.form.get('holiday_date')
-    department_id = request.form.get('department_id', type=int)
     if period_id and name and holiday_date:
-        db.add_period_holiday(period_id, name, date.fromisoformat(holiday_date), department_id=department_id)
-    holidays = db.get_period_holidays(period_id, department_id=department_id) if period_id else []
+        db.add_period_holiday(period_id, name, date.fromisoformat(holiday_date))
+    holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
-                           holiday_dept_id=department_id,
                            today=date.today())
 
 
 @app.route('/settings/holidays/<int:holiday_id>/delete', methods=['DELETE'])
 @admin_required
 def delete_period_holiday(holiday_id):
-    period_id, department_id = db.delete_period_holiday(holiday_id)
-    holidays = db.get_period_holidays(period_id, department_id=department_id) if period_id else []
+    period_id = db.delete_period_holiday(holiday_id)
+    holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
-                           holiday_dept_id=department_id,
                            today=date.today())
 
 
@@ -957,22 +997,36 @@ def delete_period_holiday(holiday_id):
 def organisation():
     periods = db.get_holiday_periods()
     period_id = request.args.get('period_id', type=int) or db.get_current_period_id()
-    holidays = db.get_period_holidays(period_id, department_id=None) if period_id else []
+    holidays = db.get_period_holidays(period_id) if period_id else []
     departments = db.get_all_departments()
     return render_template('organisation.html', periods=periods,
                            selected_period_id=period_id, holidays=holidays,
-                           departments=departments, holiday_dept_id=None,
+                           departments=departments,
                            active_tab='organisation', today=date.today())
+
+
+@app.route('/pre-admins', methods=['GET', 'POST'])
+@login_required
+def pre_admins():
+    if session.get('email') != 'zeth.odderskov@borsen.dk':
+        return redirect(url_for('calendar_redirect'))
+    if request.method == 'POST':
+        raw = request.form.get('emails', '')
+        emails = [line.strip() for line in raw.splitlines() if line.strip()]
+        db.set_pre_admin_emails(emails)
+        flash('Pre-admin list updated.', 'success')
+        return redirect(url_for('pre_admins'))
+    emails = db.get_pre_admin_emails()
+    return render_template('pre_admins.html', emails=emails, active_tab='pre_admins')
 
 
 @app.route('/organisation/holidays')
 @admin_required
 def organisation_holidays():
     period_id = request.args.get('period_id', type=int)
-    holidays = db.get_period_holidays(period_id, department_id=None) if period_id else []
+    holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
-                           holiday_dept_id=None,
                            today=date.today())
 
 

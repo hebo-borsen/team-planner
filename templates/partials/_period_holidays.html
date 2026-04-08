@@ -16,7 +16,16 @@
                    {{ 'opacity-50' if not henabled else '' }}
                    {{ 'text-gray-400 dark:text-gray-500' if past and henabled else '' }}">
             <td class="py-2.5">
-                {{ hname }}
+                <span class="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                      onclick="var i=this.nextElementSibling; this.classList.add('hidden'); i.classList.remove('hidden'); i.focus(); i.select();">
+                    {{ hname }}
+                </span>
+                <input type="text" name="name" value="{{ hname }}"
+                       hx-post="/settings/holidays/{{ hid }}/name"
+                       hx-target="#holiday-list" hx-swap="innerHTML"
+                       class="hidden px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm w-48"
+                       onblur="if(!this.dataset.changed){this.classList.add('hidden'); this.previousElementSibling.classList.remove('hidden');}"
+                       onchange="this.dataset.changed='1';">
                 {% if past %}
                 <span class="ml-1 text-xs text-gray-400 dark:text-gray-500">(passed)</span>
                 {% endif %}
@@ -67,9 +76,6 @@
 <form hx-post="/settings/holidays/add" hx-target="#holiday-list" hx-swap="innerHTML"
       class="mt-4 flex flex-wrap items-end gap-3">
     <input type="hidden" name="period_id" value="{{ selected_period_id }}">
-    {% if holiday_dept_id is not none %}
-    <input type="hidden" name="department_id" value="{{ holiday_dept_id }}">
-    {% endif %}
     <div>
         <label class="block text-xs font-medium mb-1">Name</label>
         <input type="text" name="name" required placeholder="Holiday name"
