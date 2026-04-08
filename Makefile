@@ -50,6 +50,14 @@ logs-db: ## Follow MySQL logs
 migrate: ## Run pending database migrations
 	docker exec -it vacation_app python migrate.py
 
+#-- Admin
+
+make-admin: ## Promote a user to admin (usage: make make-admin user=shortname)
+	@if [ -z "$(user)" ]; then echo "\033[31mUsage: make make-admin user=shortname\033[0m"; exit 1; fi
+	docker exec vacation_mysql mysql -u vacation_user -pvacation_pass vacation_db \
+		-e "UPDATE users SET role = 'admin' WHERE username = '$(user)';"
+	@echo "\033[32mUser '$(user)' is now admin.\033[0m"
+
 #-- Shell Access
 
 shell-app: ## Open a shell in the app container
