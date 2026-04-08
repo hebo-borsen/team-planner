@@ -20,6 +20,8 @@
                    hx-post="/departments/{{ did }}/fun" hx-target="#department-list" hx-swap="innerHTML"
                    name="is_fun" value="1"
                    hx-vals='{"is_fun": "{{ 0 if dfun else 1 }}"}'
+                   hx-confirm="{{ 'This will enable fun mode for this department — users will see custom fonts and a fun/boring toggle.' if not dfun else 'This will disable fun mode for this department.' }}"
+                   hx-on::after-request="window.location.reload()"
                    class="rounded border-gray-300 dark:border-gray-600 text-blue-600">
             Fun dept
         </label>
