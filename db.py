@@ -291,7 +291,7 @@ def get_all_users_period_summary(period_start, period_end, department_id=None):
             LEFT JOIN team_members tm ON tm.name = u.username
             LEFT JOIN vacation_days vd ON tm.id = vd.member_id
                 AND vd.vacation_date BETWEEN %s AND %s
-            WHERE u.department_id = %s
+            WHERE u.active = TRUE AND u.department_id = %s
             GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date
             ORDER BY COALESCE(u.display_name, u.username)
         """, (period_start, period_end, department_id))
@@ -304,6 +304,7 @@ def get_all_users_period_summary(period_start, period_end, department_id=None):
             LEFT JOIN team_members tm ON tm.name = u.username
             LEFT JOIN vacation_days vd ON tm.id = vd.member_id
                 AND vd.vacation_date BETWEEN %s AND %s
+            WHERE u.active = TRUE
             GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date
             ORDER BY COALESCE(u.display_name, u.username)
         """, (period_start, period_end))
@@ -1403,3 +1404,12 @@ def get_all_secondary_departments_map():
     for uid, dept_id in rows:
         result.setdefault(uid, []).append(dept_id)
     return result
+
+
+def delete_user(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()

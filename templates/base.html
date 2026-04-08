@@ -21,7 +21,7 @@
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
 
     {% block nav %}
-    {% set show_toggles = is_fun_dept %}
+    {# show_toggles is now set by the context processor #}
     {% if username %}
     <!-- Secondary nav (slim top bar) -->
     <nav class="bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 hidden sm:block">
@@ -125,10 +125,12 @@
                        class="px-3 py-1.5 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'calendar_view' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                         Calendar
                     </a>
+                    {% if not is_admin or viewing_own_dept %}
                     <a href="/my-vacations"
                        class="px-3 py-1.5 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'my_vacations' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                         My Vacations
                     </a>
+                    {% endif %}
                 </div>
 
                 <!-- Mobile burger button -->
@@ -146,10 +148,12 @@
                    class="block px-3 py-2 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'calendar_view' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                     Calendar
                 </a>
+                {% if not is_admin or viewing_own_dept %}
                 <a href="/my-vacations"
                    class="block px-3 py-2 rounded text-sm font-medium {{ 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200' if active_tab == 'my_vacations' else 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                     My Vacations
                 </a>
+                {% endif %}
                 <a href="/profile"
                    class="block px-3 py-2 rounded text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                     Profile

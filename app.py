@@ -138,6 +138,8 @@ def inject_globals():
         'nav_current_dept_id': current_dept_id,
         'nav_current_dept_name': current_dept_name,
         'is_fun_dept': is_fun_dept,
+        'show_toggles': is_fun_dept,
+        'viewing_own_dept': current_dept_id == user_dept_id,
     }
 
 
@@ -1039,6 +1041,17 @@ def set_user_secondary_departments(uid):
     dept_ids = [d for d in dept_ids if d != primary]
     db.set_user_secondary_departments(uid, dept_ids)
     flash('Secondary departments updated.', 'success')
+    return redirect(url_for('user_management'))
+
+
+@app.route('/users/<int:uid>/delete', methods=['POST'])
+@admin_required
+def delete_user(uid):
+    if uid == session.get('user_id'):
+        flash('You cannot delete yourself.', 'error')
+        return redirect(url_for('user_management'))
+    db.delete_user(uid)
+    flash('User deleted.', 'success')
     return redirect(url_for('user_management'))
 
 
