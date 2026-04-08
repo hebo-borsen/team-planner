@@ -317,6 +317,9 @@ def calendar_view(dept_id):
     # Admins can view any department; non-admins can only view their own
     user_dept_id = db.get_user_department_id(session['user_id'])
     if session.get('role') != 'admin' and user_dept_id != dept_id:
+        if user_dept_id is None:
+            flash('You are not assigned to any department.', 'warning')
+            return redirect(url_for('profile'))
         return redirect(url_for('calendar_view', dept_id=user_dept_id))
 
     # Track which department the admin is currently viewing
