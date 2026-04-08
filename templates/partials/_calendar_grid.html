@@ -57,13 +57,16 @@ tr.cal-hover td:hover::after {
                 </td>
             </tr>
             {% endif %}
-            {% for uid, uname, udisplay_name, uinitials, ufont, udept_id, udept_name in dept.users %}
+            {% for uid, uname, udisplay_name, uinitials, ufont, udept_id, udept_name, is_secondary in dept.users %}
             {% set display = udisplay_name or uname %}
             {% set selectable = is_admin or uid == user_id %}
             <tr class="{{ 'cal-row cal-hover' if selectable else '' }}" data-uid="{{ uid }}">
-                <td class="px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-900 z-10 whitespace-nowrap"
+                <td class="px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-900 z-10 whitespace-nowrap {{ 'text-gray-400 dark:text-gray-500 italic' if is_secondary else '' }}"
                     {% if ufont %}style="font-family: '{{ ufont }}', cursive;"{% endif %}>
                     {{ display }}
+                    {% if is_secondary %}
+                    <span class="text-[10px] text-gray-400 dark:text-gray-500 font-normal not-italic ml-1">({{ udept_name }})</span>
+                    {% endif %}
                 </td>
                 {% set user_vacs = vacation_dict.get(display, []) %}
                 {% set u_cells = user_review_cells.get(uid, {}) %}

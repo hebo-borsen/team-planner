@@ -775,8 +775,10 @@ def change_password():
 def user_management():
     users = db.get_all_users()
     departments = db.get_all_departments()
+    secondary_depts = db.get_all_secondary_departments_map()
     return render_template('users.html', all_users=users,
                            departments=departments,
+                           secondary_depts=secondary_depts,
                            active_tab='user_management')
 
 
@@ -1019,7 +1021,24 @@ def toggle_department_fun(dept_id):
 def set_user_department(uid):
     dept_id = request.form.get('department_id', type=int)
     db.set_user_department(uid, dept_id)
+    # Remove any secondary assignment that matches the new primary
+    if dept_id:
+        current_secondary = db.get_user_secondary_departments(uid)
+        if dept_id in current_secondary:
+            current_secondary.remove(dept_id)
+            db.set_user_secondary_departments(uid, current_secondary)
     flash('Department updated.', 'success')
+    return redirect(url_for('user_management'))
+
+
+@app.route('/users/<int:uid>/secondary-departments', methods=['POST'])
+@admin_required
+def set_user_secondary_departments(uid):
+    dept_ids = request.form.getlist('secondary_department_ids', type=int)
+    primary = db.get_user_department_id(uid)
+    dept_ids = [d for d in dept_ids if d != primary]
+    db.set_user_secondary_departments(uid, dept_ids)
+    flash('Secondary departments updated.', 'success')
     return redirect(url_for('user_management'))
 
 

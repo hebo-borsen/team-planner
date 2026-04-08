@@ -401,8 +401,8 @@ function toggleFullWidth() {
                 <select name="user_id" required
                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
                     <option value="">Select user...</option>
-                    {% for uid, uname, udisplay_name, uinitials, ufont, udept_id, udept_name in users %}
-                    <option value="{{ uid }}">{{ udisplay_name or uname }}</option>
+                    {% for uid, uname, udisplay_name, uinitials, ufont, udept_id, udept_name, is_secondary in users %}
+                    <option value="{{ uid }}">{{ udisplay_name or uname }}{{ ' (guest)' if is_secondary else '' }}</option>
                     {% endfor %}
                 </select>
             </div>

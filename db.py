@@ -852,16 +852,26 @@ def get_all_users_for_calendar(department_id=None):
     if department_id:
         cursor.execute("""
             SELECT u.id, u.username, u.display_name, u.initials, u.font,
-                   u.department_id, d.name AS dept_name
+                   u.department_id, d.name AS dept_name, 0 AS is_secondary
             FROM users u
             LEFT JOIN departments d ON u.department_id = d.id
             WHERE u.active = TRUE AND u.department_id = %s
-            ORDER BY d.sort_order, d.name, u.username
-        """, (department_id,))
+
+            UNION
+
+            SELECT u.id, u.username, u.display_name, u.initials, u.font,
+                   u.department_id, d.name AS dept_name, 1 AS is_secondary
+            FROM users u
+            LEFT JOIN departments d ON u.department_id = d.id
+            INNER JOIN user_secondary_departments usd ON u.id = usd.user_id AND usd.department_id = %s
+            WHERE u.active = TRUE
+
+            ORDER BY is_secondary, username
+        """, (department_id, department_id))
     else:
         cursor.execute("""
             SELECT u.id, u.username, u.display_name, u.initials, u.font,
-                   u.department_id, d.name AS dept_name
+                   u.department_id, d.name AS dept_name, 0 AS is_secondary
             FROM users u
             LEFT JOIN departments d ON u.department_id = d.id
             WHERE u.active = TRUE
@@ -1358,3 +1368,38 @@ def get_user_department_id(user_id):
     cursor.close()
     conn.close()
     return row[0] if row else None
+
+
+def get_user_secondary_departments(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT department_id FROM user_secondary_departments WHERE user_id = %s", (user_id,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [r[0] for r in rows]
+
+
+def set_user_secondary_departments(user_id, department_ids):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM user_secondary_departments WHERE user_id = %s", (user_id,))
+    for dept_id in department_ids:
+        cursor.execute("INSERT INTO user_secondary_departments (user_id, department_id) VALUES (%s, %s)",
+                       (user_id, dept_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def get_all_secondary_departments_map():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, department_id FROM user_secondary_departments ORDER BY user_id")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    result = {}
+    for uid, dept_id in rows:
+        result.setdefault(uid, []).append(dept_id)
+    return result

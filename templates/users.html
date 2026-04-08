@@ -71,17 +71,68 @@
 
         <!-- Row 2: Holiday settings -->
         <div class="px-5 py-3 bg-gray-50 dark:bg-gray-700/30 border-t border-gray-200 dark:border-gray-700 flex items-center gap-8 flex-wrap text-sm">
-            <div class="flex items-center gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Department:</span>
-                <form method="post" action="/users/{{ uid }}/department" class="inline">
-                    <select name="department_id" onchange="this.form.submit()"
-                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm">
-                        <option value="">— None —</option>
-                        {% for did, dname, dsort, dfun in departments %}
-                        <option value="{{ did }}" {{ 'selected' if udept_id == did else '' }}>{{ dname }}</option>
-                        {% endfor %}
-                    </select>
-                </form>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-500 dark:text-gray-400">Department:</span>
+                    <form method="post" action="/users/{{ uid }}/department" class="inline">
+                        <select name="department_id" onchange="this.form.submit()"
+                                class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm">
+                            <option value="">— None —</option>
+                            {% for did, dname, dsort, dfun in departments %}
+                            <option value="{{ did }}" {{ 'selected' if udept_id == did else '' }}>{{ dname }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </div>
+                {% if departments|length > 1 and udept_id %}
+                {% set user_secondary = secondary_depts.get(uid, []) %}
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="text-xs text-gray-400 dark:text-gray-500">Also show in:</span>
+                    {% if user_secondary %}
+                    <span class="text-xs text-gray-600 dark:text-gray-400">
+                        {% for did, dname, dsort, dfun in departments if did in user_secondary %}{{ dname }}{{ ', ' if not loop.last else '' }}{% endfor %}
+                    </span>
+                    {% endif %}
+                    <button type="button" onclick="document.getElementById('secondary-modal-{{ uid }}').classList.remove('hidden')"
+                            class="px-1.5 py-0.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded">
+                        {{ 'Edit' if user_secondary else 'Add' }}
+                    </button>
+                </div>
+                <!-- Secondary departments modal -->
+                <div id="secondary-modal-{{ uid }}" class="fixed inset-0 z-50 hidden">
+                    <div class="fixed inset-0 bg-black/50" onclick="this.parentElement.classList.add('hidden')"></div>
+                    <div class="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">
+                        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm pointer-events-auto">
+                            <h3 class="text-lg font-semibold mb-1">Also show in</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{ udisplay or uname }} will appear as a guest in the selected departments.</p>
+                            <form method="post" action="/users/{{ uid }}/secondary-departments">
+                                <div class="space-y-2 mb-4">
+                                    {% for did, dname, dsort, dfun in departments %}
+                                    {% if did != udept_id %}
+                                    <label class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        <input type="checkbox" name="secondary_department_ids" value="{{ did }}"
+                                               {{ 'checked' if did in user_secondary else '' }}
+                                               class="rounded border-gray-300 dark:border-gray-600 text-blue-600">
+                                        <span class="text-sm">{{ dname }}</span>
+                                    </label>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                                <div class="flex justify-end gap-2">
+                                    <button type="button" onclick="document.getElementById('secondary-modal-{{ uid }}').classList.add('hidden')"
+                                            class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                        Cancel
+                                    </button>
+                                    <button type="submit"
+                                            class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white">
+                                        Save
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
             <div class="flex items-center gap-2">
                 <span class="text-gray-500 dark:text-gray-400">Days off / year:</span>
