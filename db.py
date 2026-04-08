@@ -1413,6 +1413,25 @@ def delete_user(user_id):
     conn.close()
 
 
+def get_vacation_days_per_month(user_id, period_start, period_end):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT YEAR(vd.vacation_date) AS y, MONTH(vd.vacation_date) AS m, COUNT(*) AS cnt
+        FROM vacation_days vd
+        JOIN team_members tm ON vd.member_id = tm.id
+        JOIN users u ON u.username = tm.name
+        WHERE u.id = %s AND vd.status = 'approved'
+          AND vd.vacation_date BETWEEN %s AND %s
+        GROUP BY y, m
+        ORDER BY y, m
+    """, (user_id, period_start, period_end))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return {(int(y), int(m)): int(cnt) for y, m, cnt in rows}
+
+
 def get_pre_admin_emails():
     conn = get_db_connection()
     cursor = conn.cursor()

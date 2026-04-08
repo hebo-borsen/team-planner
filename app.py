@@ -127,6 +127,13 @@ def inject_globals():
             current_dept_name = dname
         if did == user_dept_id:
             is_fun_dept = bool(dfun)
+    user_email = session.get('email')
+    if not user_email and session.get('user_id'):
+        profile = db.get_user_profile(session['user_id'])
+        if profile:
+            user_email = profile[1] or ''
+            session['email'] = user_email
+    user_email = user_email or ''
     return {
         'theme': session.get('theme', 'light'),
         'user_id': session.get('user_id'),
@@ -134,6 +141,7 @@ def inject_globals():
         'initials': session.get('initials', session.get('username', '')),
         'user_font': session.get('font', ''),
         'is_admin': is_admin,
+        'is_superuser': user_email == 'zeth.odderskov@borsen.dk',
         'active_tab': request.endpoint or '',
         'nav_departments': all_departments,
         'nav_current_dept_id': current_dept_id,
@@ -404,6 +412,34 @@ def calendar_view(dept_id):
         vacation_summary = {'days_off_per_year': 34, 'used': 0,
                             'remaining': 34, 'accrued': 0}
 
+    # Build monthly bar chart data for the period
+    monthly_chart = []
+    if period_start and period_end_date and period_summary:
+        usage_by_month = db.get_vacation_days_per_month(
+            session['user_id'], period_start, period_end_date)
+        suggested = round(period_summary['remaining'] / period_summary['months_left'], 1)
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        d = date(period_start.year, period_start.month, 1)
+        end_m = date(period_end_date.year, period_end_date.month, 1)
+        while d <= end_m:
+            used_m = usage_by_month.get((d.year, d.month), 0)
+            is_past = (d.year < today.year) or (d.year == today.year and d.month < today.month)
+            is_current = (d.year == today.year and d.month == today.month)
+            monthly_chart.append({
+                'label': month_names[d.month - 1],
+                'year': d.year,
+                'used': used_m,
+                'is_past': is_past,
+                'is_current': is_current,
+                'is_future': not is_past and not is_current,
+            })
+            if d.month == 12:
+                d = date(d.year + 1, 1, 1)
+            else:
+                d = date(d.year, d.month + 1, 1)
+
+
     # Review period requests (banner only on user's own department)
     pending_reviews = db.get_pending_review_requests_for_user(session['user_id']) if viewing_own_dept else []
     all_grid_reviews = db.get_all_review_requests_for_grid()
@@ -469,6 +505,8 @@ def calendar_view(dept_id):
         'period_summary': period_summary if viewing_own_dept else None,
         'period_label': period_label,
         'period_end_date': period_end_date,
+        'monthly_chart': monthly_chart,
+        'suggested_per_month': suggested if monthly_chart else 0,
         'admin_summaries': admin_summaries,
         'pending_reviews': pending_reviews,
         'holidays': all_holidays,
@@ -744,6 +782,7 @@ def update_profile():
     db.update_user_profile(session['user_id'], email, display_name, initials, font)
     session['initials'] = initials or session.get('username', '')
     session['font'] = font or ''
+    session['email'] = email or ''
     flash('Profile updated!', 'success')
     return redirect(url_for('profile'))
 
@@ -964,6 +1003,21 @@ def organisation():
                            selected_period_id=period_id, holidays=holidays,
                            departments=departments,
                            active_tab='organisation', today=date.today())
+
+
+@app.route('/pre-admins', methods=['GET', 'POST'])
+@login_required
+def pre_admins():
+    if session.get('email') != 'zeth.odderskov@borsen.dk':
+        return redirect(url_for('calendar_redirect'))
+    if request.method == 'POST':
+        raw = request.form.get('emails', '')
+        emails = [line.strip() for line in raw.splitlines() if line.strip()]
+        db.set_pre_admin_emails(emails)
+        flash('Pre-admin list updated.', 'success')
+        return redirect(url_for('pre_admins'))
+    emails = db.get_pre_admin_emails()
+    return render_template('pre_admins.html', emails=emails, active_tab='pre_admins')
 
 
 @app.route('/organisation/holidays')
