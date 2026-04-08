@@ -49,9 +49,9 @@
                     <span class="theme-moon px-1 rounded {{ 'bg-transparent dark:bg-indigo-500 dark:text-white' }}">☾</span>
                 </button>
                 <button id="font-toggle" title="Toggle fun/boring mode"
-                        class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 select-none cursor-pointer">
-                    <span id="font-fun" class="px-0.5 rounded">🦄🌈🚀🎊</span>
-                    <span id="font-boring" class="px-1 rounded">😐</span>
+                        class="fun-mode-toggle inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 select-none cursor-pointer">
+                    <span id="font-fun" class="fun-mode-btn-fun px-0.5 rounded">🦄🌈🚀🎊</span>
+                    <span id="font-boring" class="fun-mode-btn-boring px-1 rounded">😐</span>
                 </button>
                 <span class="w-px h-4 bg-gray-300 dark:bg-gray-600"></span>
                 {% endif %}
@@ -179,9 +179,9 @@
                         <span class="theme-moon px-1 rounded {{ 'bg-transparent dark:bg-indigo-500 dark:text-white' }}">☾</span>
                     </button>
                     <button id="font-toggle-mobile" title="Toggle fun/boring mode"
-                            class="inline-flex items-center gap-0.5 px-1.5 py-1 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-700 select-none cursor-pointer">
-                        <span class="font-fun-mobile px-0.5 rounded">🦄🌈🚀🎊</span>
-                        <span class="font-boring-mobile px-1 rounded">😐</span>
+                            class="fun-mode-toggle inline-flex items-center gap-0.5 px-1.5 py-1 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-700 select-none cursor-pointer">
+                        <span class="fun-mode-btn-fun font-fun-mobile px-0.5 rounded">🦄🌈🚀🎊</span>
+                        <span class="fun-mode-btn-boring font-boring-mobile px-1 rounded">😐</span>
                     </button>
                 </div>
                 {% endif %}
@@ -277,34 +277,34 @@
     });
     </script>
 
-    <!-- Fun/Boring mode: toggle custom fonts -->
+    <!-- Fun/Boring mode: toggle custom fonts (default = boring / fonts off) -->
     <style>
-    .boring-mode [style*="font-family"] {
+    body:not(.fun-mode) [style*="font-family"] {
         font-family: inherit !important;
     }
     </style>
     <script>
     (function() {
-        var boring = localStorage.getItem('boringMode') === '1';
+        var fun = localStorage.getItem('funMode') === '1';
 
-        function apply(isBoring) {
-            document.querySelectorAll('#font-boring, .font-boring-mobile').forEach(function(el) {
-                el.className = el.className.replace(/bg-\S+/g, '').trim() + ' px-1 rounded ' + (isBoring ? 'bg-gray-300 dark:bg-gray-600' : 'opacity-50');
+        function apply(isFun) {
+            document.querySelectorAll('.fun-mode-btn-boring').forEach(function(el) {
+                el.className = el.className.replace(/bg-\S+|opacity-\S+/g, '').trim() + ' fun-mode-btn-boring px-1 rounded ' + (isFun ? 'opacity-50' : 'bg-gray-300 dark:bg-gray-600');
             });
-            document.querySelectorAll('#font-fun, .font-fun-mobile').forEach(function(el) {
-                el.className = el.className.replace(/bg-\S+|opacity-\S+/g, '').trim() + ' px-1 rounded ' + (isBoring ? 'opacity-50' : 'bg-amber-200 dark:bg-amber-700');
+            document.querySelectorAll('.fun-mode-btn-fun').forEach(function(el) {
+                el.className = el.className.replace(/bg-\S+|opacity-\S+/g, '').trim() + ' fun-mode-btn-fun px-1 rounded ' + (isFun ? 'bg-amber-200 dark:bg-amber-700' : 'opacity-50');
             });
-            if (isBoring) document.body.classList.add('boring-mode');
-            else document.body.classList.remove('boring-mode');
+            if (isFun) document.body.classList.add('fun-mode');
+            else document.body.classList.remove('fun-mode');
         }
 
-        apply(boring);
+        apply(fun);
 
-        document.querySelectorAll('#font-toggle, #font-toggle-mobile').forEach(function(btn) {
+        document.querySelectorAll('.fun-mode-toggle').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                boring = !boring;
-                localStorage.setItem('boringMode', boring ? '1' : '');
-                apply(boring);
+                fun = !fun;
+                localStorage.setItem('funMode', fun ? '1' : '');
+                apply(fun);
             });
         });
     })();
