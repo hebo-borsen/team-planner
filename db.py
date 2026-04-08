@@ -203,26 +203,28 @@ def update_days_off(user_id, days_off):
     conn.close()
 
 
-def _prorate_entitlement(days_off_per_year, start_date, period_start, period_end):
-    """If start_date is within the period, prorate. Otherwise full entitlement."""
+def _prorate_entitlement(days_off_per_year, start_date, earning_start, earning_end):
+    """If start_date is within the earning period, prorate. Otherwise full entitlement."""
     base = float(days_off_per_year)
-    if start_date and period_start <= start_date <= period_end:
-        months_in_period = (period_end.year - start_date.year) * 12 + period_end.month - start_date.month + 1
+    if start_date and earning_start <= start_date <= earning_end:
+        months_in_period = (earning_end.year - start_date.year) * 12 + earning_end.month - start_date.month + 1
         if months_in_period < 1:
             months_in_period = 1
         return round(base / 12 * months_in_period, 1)
     return base
 
 
-def get_vacation_summary(user_id, period_start, period_end):
+def get_vacation_summary(user_id, period_start, period_end, earning_start=None, earning_end=None):
     from datetime import date as _date
+    earn_start = earning_start or period_start
+    earn_end = earning_end or period_end
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT days_off_per_year, start_date FROM users WHERE id = %s", (user_id,))
     row = cursor.fetchone()
     base_days = row[0] if row and row[0] is not None else 34
     user_start = row[1] if row else None
-    entitlement = _prorate_entitlement(base_days, user_start, period_start, period_end)
+    entitlement = _prorate_entitlement(base_days, user_start, earn_start, earn_end)
 
     cursor.execute("""
         SELECT COUNT(*) FROM vacation_days vd
@@ -236,9 +238,9 @@ def get_vacation_summary(user_id, period_start, period_end):
     cursor.close()
     conn.close()
 
-    # Calculate accrued dynamically: (entitlement / 12) * months elapsed
+    # Calculate accrued dynamically based on earning period
     today = _date.today()
-    accrual_start = max(period_start, user_start) if user_start and user_start > period_start else period_start
+    accrual_start = max(earn_start, user_start) if user_start and user_start > earn_start else earn_start
     months_elapsed = (today.year - accrual_start.year) * 12 + today.month - accrual_start.month
     if months_elapsed < 0:
         months_elapsed = 0
@@ -255,14 +257,16 @@ def get_vacation_summary(user_id, period_start, period_end):
     }
 
 
-def get_period_vacation_summary(user_id, period_start, period_end):
+def get_period_vacation_summary(user_id, period_start, period_end, earning_start=None, earning_end=None):
+    earn_start = earning_start or period_start
+    earn_end = earning_end or period_end
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT days_off_per_year, start_date FROM users WHERE id = %s", (user_id,))
     row = cursor.fetchone()
     base_days = row[0] if row and row[0] is not None else 34
     user_start = row[1] if row else None
-    entitlement = _prorate_entitlement(base_days, user_start, period_start, period_end)
+    entitlement = _prorate_entitlement(base_days, user_start, earn_start, earn_end)
 
     cursor.execute("""
         SELECT COUNT(*) FROM vacation_days vd
@@ -283,7 +287,9 @@ def get_period_vacation_summary(user_id, period_start, period_end):
     }
 
 
-def get_all_users_period_summary(period_start, period_end, department_id=None):
+def get_all_users_period_summary(period_start, period_end, department_id=None, earning_start=None, earning_end=None):
+    earn_start = earning_start or period_start
+    earn_end = earning_end or period_end
     conn = get_db_connection()
     cursor = conn.cursor()
     if department_id is not None:
@@ -315,11 +321,10 @@ def get_all_users_period_summary(period_start, period_end, department_id=None):
     raw = cursor.fetchall()
     cursor.close()
     conn.close()
-    # Prorate entitlement per user
     results = []
     for uid, display_name, base_days, user_start, used in raw:
         base = base_days if base_days is not None else 34
-        entitlement = _prorate_entitlement(base, user_start, period_start, period_end)
+        entitlement = _prorate_entitlement(base, user_start, earn_start, earn_end)
         results.append((uid, display_name, entitlement, int(used)))
     return results
 
@@ -937,7 +942,7 @@ def get_holidays_for_date_range(start_date, end_date):
 def get_holiday_periods():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, label, start_date, end_date FROM holiday_periods ORDER BY start_date")
+    cursor.execute("SELECT id, label, start_date, end_date, earning_start, earning_end FROM holiday_periods ORDER BY start_date")
     periods = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -956,6 +961,29 @@ def get_current_period_id():
     cursor.close()
     conn.close()
     return row[0] if row else None
+
+
+def ensure_periods_exist():
+    """Auto-generate holiday periods for current year ± 5 years."""
+    from datetime import date as _date
+    current_year = _date.today().year
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    for year in range(current_year - 2, current_year + 6):
+        label = f"{year}/{year + 1}"
+        earning_start = _date(year, 9, 1)
+        earning_end = _date(year + 1, 8, 31)
+        spending_start = _date(year + 1, 1, 1)
+        spending_end = _date(year + 1, 12, 31)
+        try:
+            cursor.execute(
+                "INSERT INTO holiday_periods (label, start_date, end_date, earning_start, earning_end) VALUES (%s, %s, %s, %s, %s)",
+                (label, spending_start, spending_end, earning_start, earning_end))
+        except mysql.connector.IntegrityError:
+            pass
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 def get_period_holidays(period_id):
@@ -1028,6 +1056,20 @@ def add_period_holiday(period_id, name, holiday_date):
     cursor.execute(
         "INSERT INTO period_holidays (period_id, name, holiday_date, enabled, department_id) VALUES (%s, %s, %s, TRUE, NULL)",
         (period_id, name, holiday_date))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def generate_holidays_for_period(period_id, holidays_list):
+    """Delete existing holidays for a period and insert from a list of (name, date) tuples."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM period_holidays WHERE period_id = %s", (period_id,))
+    for name, hdate in holidays_list:
+        cursor.execute(
+            "INSERT INTO period_holidays (period_id, name, holiday_date, enabled, department_id) VALUES (%s, %s, %s, TRUE, NULL)",
+            (period_id, name, hdate))
     conn.commit()
     cursor.close()
     conn.close()
@@ -1430,6 +1472,28 @@ def get_vacation_days_per_month(user_id, period_start, period_end):
     cursor.close()
     conn.close()
     return {(int(y), int(m)): int(cnt) for y, m, cnt in rows}
+
+
+def get_all_vacation_days_per_month(period_start, period_end):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT u.id, YEAR(vd.vacation_date) AS y, MONTH(vd.vacation_date) AS m, COUNT(*) AS cnt
+        FROM vacation_days vd
+        JOIN team_members tm ON vd.member_id = tm.id
+        JOIN users u ON u.username = tm.name
+        WHERE vd.status = 'approved'
+          AND vd.vacation_date BETWEEN %s AND %s
+        GROUP BY u.id, y, m
+        ORDER BY u.id, y, m
+    """, (period_start, period_end))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    result = {}
+    for uid, y, m, cnt in rows:
+        result.setdefault(int(uid), {})[(int(y), int(m))] = int(cnt)
+    return result
 
 
 def get_pre_admin_emails():

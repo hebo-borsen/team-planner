@@ -34,7 +34,7 @@
         <select id="org-period-select" name="period_id"
                 hx-get="/organisation/holidays" hx-target="#holiday-list" hx-swap="innerHTML"
                 class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-full max-w-xs">
-            {% for pid, plabel, pstart, pend in periods %}
+            {% for pid, plabel, pstart, pend, estart, eend in periods %}
             <option value="{{ pid }}" {{ 'selected' if pid == selected_period_id else '' }}>
                 {{ plabel }} ({{ pstart|fmtdate }} – {{ pend|fmtdate }})
             </option>
@@ -44,6 +44,22 @@
 
     <div id="holiday-list">
         {% include "partials/_period_holidays.html" %}
+    </div>
+</div>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+    <h2 class="text-lg font-semibold mb-4">Holiday Periods</h2>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Each holiday period has an <strong>earning period</strong> (Sep 1 – Aug 31, when days accrue) and a <strong>holiday period</strong> (Jan 1 – Dec 31, when days can be spent).
+    </p>
+    <div class="space-y-2">
+        {% for pid, plabel, pstart, pend, estart, eend in periods %}
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2.5 bg-gray-50 dark:bg-gray-700/30 rounded-lg text-sm">
+            <span class="font-medium w-24">{{ plabel }}</span>
+            <span class="text-gray-500 dark:text-gray-400">Earning period: <span class="text-gray-700 dark:text-gray-300">{{ estart|fmtdate }} – {{ eend|fmtdate }}</span></span>
+            <span class="text-gray-500 dark:text-gray-400">Holiday period: <span class="text-gray-700 dark:text-gray-300">{{ pstart|fmtdate }} – {{ pend|fmtdate }}</span></span>
+        </div>
+        {% endfor %}
     </div>
 </div>
 {% endblock %}

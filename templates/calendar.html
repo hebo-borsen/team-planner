@@ -119,9 +119,14 @@ function toggleFullWidth() {
 {% if period_summary %}
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
     <h2 class="text-lg font-semibold mb-4">Holiday Period {{ period_label }}</h2>
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">
         Ends {{ period_end_date|fmtdate }} &middot; <strong>{{ period_summary.months_left }} month{{ 's' if period_summary.months_left != 1 else '' }} remaining</strong>
     </p>
+    {% if earning_start and earning_end %}
+    <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">
+        Earning period: {{ earning_start|fmtdate }} – {{ earning_end|fmtdate }}
+    </p>
+    {% endif %}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
             <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ period_summary.remaining|round|int }}{% if period_summary.remaining != period_summary.remaining|round|int %} <span class="text-xs font-normal text-gray-400 dark:text-gray-500">(rounded from {{ period_summary.remaining }})</span>{% endif %}</div>
@@ -164,10 +169,10 @@ function toggleFullWidth() {
                     {% for m in monthly_chart %}
                     {% set bar_val = m.used if (m.is_past or m.is_current) else suggested_per_month %}
                     <div class="flex-1 flex flex-col items-center h-full justify-end">
-                        {% if bar_val > 0 %}
-                        <span class="text-[9px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">{{ bar_val|round|int }}</span>
-                        {% endif %}
-                        <div class="w-full" style="height: {{ (bar_val / bmax * 100)|round }}%;">
+                        <div class="w-full relative flex items-end justify-center" style="height: {{ (bar_val / bmax * 100)|round }}%;">
+                            {% if bar_val > 0 %}
+                            <span class="absolute inset-x-0 top-1.5 text-center text-[9px] font-medium {% if m.is_future %}text-gray-500 dark:text-gray-200{% else %}text-white dark:text-gray-200{% endif %} drop-shadow-sm">{% if m.is_future %}{{ bar_val }}{% else %}{{ bar_val|round|int }}{% endif %}</span>
+                            {% endif %}
                             {% if m.is_future %}
                             <div class="w-full h-full rounded-t bg-gray-300 dark:bg-gray-600"></div>
                             {% else %}
@@ -212,11 +217,11 @@ function toggleFullWidth() {
                     <th class="text-right py-2 font-medium" onclick="sortTable(1)">Entitlement <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-right py-2 font-medium" onclick="sortTable(2)">Used <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-right py-2 font-medium" onclick="sortTable(3)">Remaining <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium" onclick="sortTable(4)">Avg/month needed <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-left py-2 font-medium pl-4" onclick="sortTable(4)">Days/month <span class="sort-icon text-gray-400">&#8597;</span></th>
                 </tr>
             </thead>
             <tbody>
-                {% for uid, display_name, entitlement, used in admin_summaries %}
+                {% for uid, display_name, entitlement, used, user_chart, user_suggested in admin_summaries %}
                 {% set remaining = entitlement - (used|float) %}
                 <tr class="border-b border-gray-100 dark:border-gray-800">
                     <td class="py-2.5">{{ display_name }}</td>
@@ -225,12 +230,32 @@ function toggleFullWidth() {
                     <td class="py-2.5 text-right font-medium">
                         {{ remaining }}
                     </td>
-                    <td class="py-2.5 text-right">
-                        {% if period_summary and period_summary.months_left > 0 %}
-                        {% set avg = (remaining / period_summary.months_left)|round(1) %}
-                        <span class="{{ 'text-red-600 dark:text-red-400 font-medium' if avg > 5.5 else '' }}">{{ avg }}</span>
-                        {% else %}
-                        -
+                    <td class="py-2 pl-4">
+                        {% if user_chart %}
+                        {% set ubar_max = [user_suggested] %}
+                        {% for m in user_chart %}
+                            {% set bv = m.used if (m.is_past or m.is_current) else user_suggested %}
+                            {% if bv > ubar_max[0] %}{% set _ = ubar_max.pop() %}{% set _ = ubar_max.append(bv) %}{% endif %}
+                        {% endfor %}
+                        {% set ubmax = ubar_max[0] if ubar_max[0] > 0 else 1 %}
+                        <div class="relative inline-flex items-end gap-px" style="height: 28px; min-width: 80px;" data-sort-value="{{ user_suggested }}">
+                            {% set future_count = user_chart|selectattr('is_future')|list|length %}
+                            {% set total_count = user_chart|length %}
+                            {% if future_count > 0 %}
+                            <div class="absolute right-0 border-t border-dashed border-amber-400 dark:border-amber-500 pointer-events-none" style="bottom: {{ (user_suggested / ubmax * 100)|round }}%; width: {{ (future_count / total_count * 100)|round }}%;"></div>
+                            {% endif %}
+                            {% for m in user_chart %}
+                            {% set bv = m.used if (m.is_past or m.is_current) else user_suggested %}
+                            <div class="flex-1" style="height: {{ (bv / ubmax * 100)|round if bv > 0 else 0 }}%; min-width: 3px;">
+                                {% if m.is_future %}
+                                <div class="w-full h-full rounded-sm bg-gray-300 dark:bg-gray-600"></div>
+                                {% else %}
+                                <div class="w-full h-full rounded-sm bg-blue-400 dark:bg-blue-500"></div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <span class="text-[9px] text-gray-400 dark:text-gray-500 ml-1">{{ user_suggested }}/mo</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -238,7 +263,6 @@ function toggleFullWidth() {
             </tbody>
         </table>
     </div>
-    <p class="text-xs text-gray-400 dark:text-gray-500 mt-3 text-right"><span class="text-red-600 dark:text-red-400 font-medium">Red</span> = avg/month needed exceeds 5.5 (risk of backloading).</p>
 </div>
 
 <script>
@@ -250,8 +274,10 @@ function toggleFullWidth() {
         const rows = Array.from(tbody.rows);
         if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = true; }
         rows.sort(function(a, b) {
-            let av = a.cells[col].textContent.trim();
-            let bv = b.cells[col].textContent.trim();
+            let sortEl = a.cells[col].querySelector('[data-sort-value]');
+            let av = sortEl ? sortEl.getAttribute('data-sort-value') : a.cells[col].textContent.trim();
+            sortEl = b.cells[col].querySelector('[data-sort-value]');
+            let bv = sortEl ? sortEl.getAttribute('data-sort-value') : b.cells[col].textContent.trim();
             let an = parseFloat(av), bn = parseFloat(bv);
             if (!isNaN(an) && !isNaN(bn)) return sortAsc ? an - bn : bn - an;
             if (av === '' && bv !== '') return 1;

@@ -1,6 +1,6 @@
 <style>
 tr.cal-hover:hover { outline: 2px solid rgba(59,130,246,0.5); outline-offset: -2px; }
-tr.cal-hover:hover td { position: relative; }
+tr.cal-hover:hover td:not(.sticky-name) { position: relative; }
 tr.cal-hover td:hover::after {
     content: ''; position: absolute; inset: 0;
     background-color: rgba(0,0,0,0.12); pointer-events: none; border-radius: 2px;
@@ -61,7 +61,7 @@ tr.cal-hover td:hover::after {
             {% set display = udisplay_name or uname %}
             {% set selectable = is_admin or uid == user_id %}
             <tr class="{{ 'cal-row cal-hover' if selectable else '' }}" data-uid="{{ uid }}">
-                <td class="px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-900 z-10 whitespace-nowrap {{ 'text-gray-400 dark:text-gray-500 italic' if is_secondary else '' }}"
+                <td class="sticky-name px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-900 z-10 whitespace-nowrap {{ 'text-gray-400 dark:text-gray-500 italic' if is_secondary else '' }}"
                     {% if ufont %}style="font-family: '{{ ufont }}', cursive;"{% endif %}>
                     {{ display }}
                     {% if is_secondary %}

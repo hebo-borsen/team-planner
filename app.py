@@ -11,6 +11,7 @@ from flask import (
 from openpyxl import Workbook
 
 import db
+import danish_holidays
 from migrate import run_migrations
 
 # ---------------------------------------------------------------------------
@@ -22,6 +23,7 @@ app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 run_migrations()
+db.ensure_periods_exist()
 
 
 # ---------------------------------------------------------------------------
@@ -256,16 +258,21 @@ def initial_accrued():
     period_id = db.get_current_period_id()
     period_start = None
     period_end = None
+    earning_start = None
+    earning_end = None
     period_label = None
     days_off = 34
     if period_id:
-        for pid, plabel, pstart, pend in db.get_holiday_periods():
+        for pid, plabel, pstart, pend, estart, eend in db.get_holiday_periods():
             if pid == period_id:
                 period_start = pstart
                 period_end = pend
+                earning_start = estart or pstart
+                earning_end = eend or pend
                 period_label = plabel
                 days_off = db.get_vacation_summary(
-                    session['user_id'], pstart, pend)['days_off_per_year']
+                    session['user_id'], pstart, pend,
+                    earning_start=earning_start, earning_end=earning_end)['days_off_per_year']
                 break
 
     if request.method == 'POST':
@@ -385,16 +392,21 @@ def calendar_view(dept_id):
     period_label = None
     period_start = None
     period_end_date = None
+    earning_start = None
+    earning_end = None
     admin_summaries = []
     if period_id:
         periods = db.get_holiday_periods()
-        for pid, plabel, pstart, pend in periods:
+        for pid, plabel, pstart, pend, estart, eend in periods:
             if pid == period_id:
                 period_label = plabel
                 period_start = pstart
                 period_end_date = pend
+                earning_start = estart or pstart
+                earning_end = eend or pend
                 period_summary = db.get_period_vacation_summary(
-                    session['user_id'], pstart, pend)
+                    session['user_id'], pstart, pend,
+                    earning_start=earning_start, earning_end=earning_end)
                 months_left = (pend.year - today.year) * 12 + pend.month - today.month
                 if months_left < 1:
                     months_left = 1
@@ -402,12 +414,43 @@ def calendar_view(dept_id):
                     period_summary['remaining'] / months_left, 1)
                 period_summary['months_left'] = months_left
                 if session.get('role') == 'admin':
-                    admin_summaries = db.get_all_users_period_summary(pstart, pend, department_id=dept_id)
+                    admin_summaries = db.get_all_users_period_summary(
+                        pstart, pend, department_id=dept_id,
+                        earning_start=earning_start, earning_end=earning_end)
+                    all_usage = db.get_all_vacation_days_per_month(pstart, pend)
+                    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                    enriched = []
+                    for uid, display_name, entitlement, used in admin_summaries:
+                        remaining = entitlement - used
+                        user_suggested = round(remaining / months_left, 1)
+                        user_usage = all_usage.get(uid, {})
+                        chart = []
+                        d_m = date(pstart.year, pstart.month, 1)
+                        end_m = date(pend.year, pend.month, 1)
+                        while d_m <= end_m:
+                            used_m = user_usage.get((d_m.year, d_m.month), 0)
+                            is_past = (d_m.year < today.year) or (d_m.year == today.year and d_m.month < today.month)
+                            is_current = (d_m.year == today.year and d_m.month == today.month)
+                            chart.append({
+                                'label': month_names[d_m.month - 1],
+                                'used': used_m,
+                                'is_past': is_past,
+                                'is_current': is_current,
+                                'is_future': not is_past and not is_current,
+                            })
+                            if d_m.month == 12:
+                                d_m = date(d_m.year + 1, 1, 1)
+                            else:
+                                d_m = date(d_m.year, d_m.month + 1, 1)
+                        enriched.append((uid, display_name, entitlement, used, chart, user_suggested))
+                    admin_summaries = enriched
                 break
 
     if period_start and period_end_date:
         vacation_summary = db.get_vacation_summary(
-            session['user_id'], period_start, period_end_date)
+            session['user_id'], period_start, period_end_date,
+            earning_start=earning_start, earning_end=earning_end)
     else:
         vacation_summary = {'days_off_per_year': 34, 'used': 0,
                             'remaining': 34, 'accrued': 0}
@@ -505,6 +548,8 @@ def calendar_view(dept_id):
         'period_summary': period_summary if viewing_own_dept else None,
         'period_label': period_label,
         'period_end_date': period_end_date,
+        'earning_start': earning_start,
+        'earning_end': earning_end,
         'monthly_chart': monthly_chart,
         'suggested_per_month': suggested if monthly_chart else 0,
         'admin_summaries': admin_summaries,
@@ -1005,6 +1050,7 @@ def organisation():
                            active_tab='organisation', today=date.today())
 
 
+
 @app.route('/pre-admins', methods=['GET', 'POST'])
 @login_required
 def pre_admins():
@@ -1024,6 +1070,23 @@ def pre_admins():
 @admin_required
 def organisation_holidays():
     period_id = request.args.get('period_id', type=int)
+    holidays = db.get_period_holidays(period_id) if period_id else []
+    return render_template('partials/_period_holidays.html',
+                           holidays=holidays, selected_period_id=period_id,
+                           today=date.today())
+
+
+@app.route('/organisation/holidays/generate', methods=['POST'])
+@admin_required
+def generate_holidays():
+    periods = db.get_holiday_periods()
+    for pid, label, pstart, pend, estart, eend in periods:
+        year_holidays = []
+        for y in range(pstart.year, pend.year + 1):
+            year_holidays.extend(danish_holidays.get_danish_holidays(y))
+        in_period = [(n, d) for n, d in year_holidays if pstart <= d <= pend]
+        db.generate_holidays_for_period(pid, in_period)
+    period_id = request.form.get('period_id', type=int) or db.get_current_period_id()
     holidays = db.get_period_holidays(period_id) if period_id else []
     return render_template('partials/_period_holidays.html',
                            holidays=holidays, selected_period_id=period_id,
