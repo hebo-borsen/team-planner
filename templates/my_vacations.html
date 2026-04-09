@@ -24,10 +24,6 @@
                         <span class="text-gray-400 dark:text-gray-500">({{ g.count }} days)</span>
                     {% endif %}
                 </span>
-                <span class="text-xs text-gray-400 dark:text-gray-500">
-                    {% if g.created_by %}Added by {{ g.created_by }}{% endif %}
-                    {% if g.created_at %}&middot; {{ g.created_at|fmtdatetime }}{% endif %}
-                </span>
             </div>
             <div class="inline-flex gap-2 shrink-0">
                 <form method="post" action="/vacations/bulk-removal" class="inline">
@@ -86,6 +82,13 @@
                 </tbody>
             </table>
         </div>
+
+        {% if g.created_by or g.created_at %}
+        <div class="px-4 py-2 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500">
+            {% if g.created_by %}Added by {{ g.created_by }}{% endif %}
+            {% if g.created_at %}{% if g.created_by %} &middot; {% endif %}{{ g.created_at|fmtdatetime }}{% endif %}
+        </div>
+        {% endif %}
     </div>
     {% endfor %}
 </div>
