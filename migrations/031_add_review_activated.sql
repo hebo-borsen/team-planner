@@ -1,0 +1,2 @@
+ALTER TABLE review_requests ADD COLUMN review_activated DATETIME DEFAULT NULL;
+ALTER TABLE review_requests ALTER COLUMN active SET DEFAULT FALSE;

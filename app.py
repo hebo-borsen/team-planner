@@ -319,7 +319,7 @@ def calendar_redirect():
             dept_id = departments[0][0]
         else:
             flash('No departments have been created yet.', 'warning')
-            return redirect(url_for('settings') if session.get('role') == 'admin' else url_for('profile'))
+            return redirect(url_for('review_requests_page') if session.get('role') == 'admin' else url_for('profile'))
     return redirect(url_for('calendar_view', dept_id=dept_id))
 
 
@@ -951,16 +951,16 @@ def admin_change_password(user_id):
 # Settings (admin)
 # ---------------------------------------------------------------------------
 
-@app.route('/settings')
+@app.route('/review-requests')
 @admin_required
-def settings():
+def review_requests_page():
     dept_id = session.get('viewing_department_id') or session.get('department_id')
     review_requests = db.get_all_review_requests(department_id=dept_id)
     departments = db.get_all_departments()
-    return render_template('settings.html',
+    return render_template('review_requests.html',
                            review_requests=review_requests,
                            departments=departments,
-                           active_tab='settings', today=date.today())
+                           active_tab='review_requests', today=date.today())
 
 
 @app.route('/settings/holidays')
@@ -1185,18 +1185,18 @@ def create_review_request():
     dept_id = request.form.get('department_id', type=int)
     if not title or not start_date_str or not end_date_str or not dept_id:
         flash('Please fill in all fields.', 'error')
-        return redirect(url_for('settings'))
+        return redirect(url_for('review_requests_page'))
     color = request.form.get('color', '#f59e0b').strip()
     start = date.fromisoformat(start_date_str)
     end = date.fromisoformat(end_date_str)
     if start > end:
         flash('End date must be after start date.', 'error')
-        return redirect(url_for('settings'))
+        return redirect(url_for('review_requests_page'))
     db.create_review_request(title, start, end, session['user_id'], department_id=dept_id, color=color)
     db.insert_operation_log(session['user_id'], 'review_request',
                             f'Created review request: {title}')
     flash('Review request created.', 'success')
-    return redirect(url_for('settings'))
+    return redirect(url_for('review_requests_page'))
 
 
 @app.route('/review-requests/<int:request_id>/toggle', methods=['POST'])

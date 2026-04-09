@@ -1121,7 +1121,7 @@ def create_review_request(title, start_date, end_date, created_by, department_id
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO review_requests (title, start_date, end_date, created_by, department_id, color) VALUES (%s, %s, %s, %s, %s, %s)",
+        "INSERT INTO review_requests (title, start_date, end_date, created_by, department_id, color, active) VALUES (%s, %s, %s, %s, %s, %s, FALSE)",
         (title, start_date, end_date, created_by, department_id, color))
     conn.commit()
     new_id = cursor.lastrowid
@@ -1137,7 +1137,7 @@ def get_all_review_requests(department_id=None):
         cursor.execute("""
             SELECT rr.id, rr.title, rr.start_date, rr.end_date, rr.created_by, rr.active, rr.created_at,
                    COALESCE(u.display_name, u.username) AS creator_name,
-                   rr.department_id, d.name AS dept_name, rr.color
+                   rr.department_id, d.name AS dept_name, rr.color, rr.review_activated
             FROM review_requests rr
             LEFT JOIN users u ON u.id = rr.created_by
             LEFT JOIN departments d ON d.id = rr.department_id
@@ -1148,7 +1148,7 @@ def get_all_review_requests(department_id=None):
         cursor.execute("""
             SELECT rr.id, rr.title, rr.start_date, rr.end_date, rr.created_by, rr.active, rr.created_at,
                    COALESCE(u.display_name, u.username) AS creator_name,
-                   rr.department_id, d.name AS dept_name, rr.color
+                   rr.department_id, d.name AS dept_name, rr.color, rr.review_activated
             FROM review_requests rr
             LEFT JOIN users u ON u.id = rr.created_by
             LEFT JOIN departments d ON d.id = rr.department_id
@@ -1325,9 +1325,16 @@ def get_review_signoff_user_ids():
 def toggle_review_request_active(request_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE review_requests SET active = NOT active WHERE id = %s",
-        (request_id,))
+    cursor.execute("SELECT active, review_activated FROM review_requests WHERE id = %s", (request_id,))
+    row = cursor.fetchone()
+    if row and not row[0] and not row[1]:
+        cursor.execute(
+            "UPDATE review_requests SET active = TRUE, review_activated = NOW() WHERE id = %s",
+            (request_id,))
+    else:
+        cursor.execute(
+            "UPDATE review_requests SET active = NOT active WHERE id = %s",
+            (request_id,))
     conn.commit()
     cursor.close()
     conn.close()
