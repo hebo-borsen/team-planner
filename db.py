@@ -36,6 +36,9 @@ def authenticate_user(username, password):
         (username, hash_password(password))
     )
     user = cursor.fetchone()
+    if user:
+        cursor.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user[0],))
+        conn.commit()
     cursor.close()
     conn.close()
     return user
@@ -296,36 +299,38 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
         cursor.execute("""
             SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
                    u.days_off_per_year, u.start_date,
-                   COALESCE(SUM(CASE WHEN vd.status = 'approved' THEN 1 ELSE 0 END), 0) AS used
+                   COALESCE(SUM(CASE WHEN vd.status = 'approved' THEN 1 ELSE 0 END), 0) AS used,
+                   u.last_login
             FROM users u
             LEFT JOIN team_members tm ON tm.name = u.username
             LEFT JOIN vacation_days vd ON tm.id = vd.member_id
                 AND vd.vacation_date BETWEEN %s AND %s
             WHERE u.active = TRUE AND u.department_id = %s
-            GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date
+            GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date, u.last_login
             ORDER BY COALESCE(u.display_name, u.username)
         """, (period_start, period_end, department_id))
     else:
         cursor.execute("""
             SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
                    u.days_off_per_year, u.start_date,
-                   COALESCE(SUM(CASE WHEN vd.status = 'approved' THEN 1 ELSE 0 END), 0) AS used
+                   COALESCE(SUM(CASE WHEN vd.status = 'approved' THEN 1 ELSE 0 END), 0) AS used,
+                   u.last_login
             FROM users u
             LEFT JOIN team_members tm ON tm.name = u.username
             LEFT JOIN vacation_days vd ON tm.id = vd.member_id
                 AND vd.vacation_date BETWEEN %s AND %s
             WHERE u.active = TRUE
-            GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date
+            GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date, u.last_login
             ORDER BY COALESCE(u.display_name, u.username)
         """, (period_start, period_end))
     raw = cursor.fetchall()
     cursor.close()
     conn.close()
     results = []
-    for uid, display_name, base_days, user_start, used in raw:
+    for uid, display_name, base_days, user_start, used, last_login in raw:
         base = base_days if base_days is not None else 34
         entitlement = _prorate_entitlement(base, user_start, earn_start, earn_end)
-        results.append((uid, display_name, entitlement, int(used)))
+        results.append((uid, display_name, entitlement, int(used), last_login))
     return results
 
 
@@ -634,10 +639,12 @@ def get_user_vacations_grouped(user_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT vd.id, vd.vacation_date, vd.created_at
+        SELECT vd.id, vd.vacation_date, vd.created_at,
+               COALESCE(creator.display_name, vd.requested_by) AS created_by_name
         FROM vacation_days vd
         JOIN team_members tm ON vd.member_id = tm.id
         JOIN users u ON u.username = tm.name
+        LEFT JOIN users creator ON creator.username = vd.requested_by
         WHERE u.id = %s
         ORDER BY vd.created_at, vd.vacation_date
     """, (user_id,))
@@ -647,7 +654,7 @@ def get_user_vacations_grouped(user_id):
 
     groups = []
     current = None
-    for vid, vdate, created_at in rows:
+    for vid, vdate, created_at, created_by_name in rows:
         if current and current['created_at'] == created_at:
             current['ids'].append(vid)
             current['dates'].append(vdate)
@@ -662,6 +669,7 @@ def get_user_vacations_grouped(user_id):
                 'start_date': vdate,
                 'end_date': vdate,
                 'created_at': created_at,
+                'created_by': created_by_name,
                 'count': 1,
             }
     if current:

@@ -24,6 +24,10 @@
                         <span class="text-gray-400 dark:text-gray-500">({{ g.count }} days)</span>
                     {% endif %}
                 </span>
+                <span class="text-xs text-gray-400 dark:text-gray-500">
+                    {% if g.created_by %}Added by {{ g.created_by }}{% endif %}
+                    {% if g.created_at %}&middot; {{ g.created_at|fmtdatetime }}{% endif %}
+                </span>
             </div>
             <div class="inline-flex gap-2 shrink-0">
                 <form method="post" action="/vacations/bulk-removal" class="inline">
