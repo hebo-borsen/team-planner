@@ -218,10 +218,11 @@ function toggleFullWidth() {
                     <th class="text-right py-2 font-medium" onclick="sortTable(2)">Used <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-right py-2 font-medium" onclick="sortTable(3)">Remaining <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-left py-2 font-medium pl-4" onclick="sortTable(4)">Days/month <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(5)">Last login <span class="sort-icon text-gray-400">&#8597;</span></th>
                 </tr>
             </thead>
             <tbody>
-                {% for uid, display_name, entitlement, used, user_chart, user_suggested in admin_summaries %}
+                {% for uid, display_name, entitlement, used, user_chart, user_suggested, last_login in admin_summaries %}
                 {% set remaining = entitlement - (used|float) %}
                 <tr class="border-b border-gray-100 dark:border-gray-800">
                     <td class="py-2.5">{{ display_name }}</td>
@@ -257,6 +258,9 @@ function toggleFullWidth() {
                         </div>
                         <span class="text-[9px] text-gray-400 dark:text-gray-500 ml-1">{{ user_suggested }}/mo</span>
                         {% endif %}
+                    </td>
+                    <td class="py-2.5 text-right text-gray-500 dark:text-gray-400" {% if last_login %}data-sort-value="{{ last_login.strftime('%Y%m%d%H%M') }}"{% else %}data-sort-value="0"{% endif %}>
+                        {% if last_login %}{{ last_login|fmtdatetime }}{% else %}<span class="text-gray-400 dark:text-gray-600">Never</span>{% endif %}
                     </td>
                 </tr>
                 {% endfor %}
