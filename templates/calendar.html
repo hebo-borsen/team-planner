@@ -167,26 +167,32 @@ function toggleFullWidth() {
             <div class="relative">
                 <div class="flex items-end gap-px" style="height: 100px;">
                     {% for m in monthly_chart %}
+                    {% if m.is_future and suggested_per_month <= 0 %}
+                    <div class="flex-1"></div>
+                    {% else %}
                     {% set bar_val = m.used if (m.is_past or m.is_current) else suggested_per_month %}
                     <div class="flex-1 flex flex-col items-center h-full justify-end">
                         <div class="w-full relative flex items-end justify-center" style="height: {{ (bar_val / bmax * 100)|round }}%;">
                             {% if bar_val > 0 %}
-                            <span class="absolute inset-x-0 top-1.5 text-center text-[9px] font-medium {% if m.is_future %}text-gray-500 dark:text-gray-200{% else %}text-white dark:text-gray-200{% endif %} drop-shadow-sm">{% if m.is_future %}{{ bar_val }}{% else %}{{ bar_val|round|int }}{% endif %}</span>
+                            <span class="absolute inset-x-0 top-1.5 text-center text-[9px] font-medium {% if m.is_future %}text-amber-800 dark:text-amber-200{% else %}text-white dark:text-gray-200{% endif %} drop-shadow-sm">{% if m.is_future %}{{ bar_val }}{% else %}{{ bar_val|round|int }}{% endif %}</span>
                             {% endif %}
                             {% if m.is_future %}
-                            <div class="w-full h-full rounded-t bg-gray-300 dark:bg-gray-600"></div>
+                            <div class="w-full h-full rounded-t bg-amber-300 dark:bg-amber-600"></div>
                             {% else %}
                             <div class="w-full h-full rounded-t bg-blue-400 dark:bg-blue-500"></div>
                             {% endif %}
                         </div>
                     </div>
+                    {% endif %}
                     {% endfor %}
                 </div>
+                {% if suggested_per_month > 0 %}
                 {% set future_count = monthly_chart|selectattr('is_future')|list|length %}
                 {% if future_count > 0 %}
                 {% set total_count = monthly_chart|length %}
                 {% set past_count = total_count - future_count %}
                 <div class="absolute right-0 border-t-2 border-dashed border-amber-400 dark:border-amber-500 pointer-events-none" style="bottom: {{ (suggested_per_month / bmax * 100)|round }}%; width: {{ (future_count / total_count * 100)|round }}%;"></div>
+                {% endif %}
                 {% endif %}
             </div>
             <div class="flex gap-px mt-1">
@@ -196,8 +202,10 @@ function toggleFullWidth() {
             </div>
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] text-gray-400 dark:text-gray-500">
                 <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-blue-400 dark:bg-blue-500"></span> Used</span>
-                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-gray-300 dark:bg-gray-600"></span> Suggested</span>
+                {% if suggested_per_month > 0 %}
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-amber-300 dark:bg-amber-600"></span> Suggested</span>
                 <span class="flex items-center gap-1"><span class="inline-block w-2 h-0 border-t border-dashed border-amber-400 dark:border-amber-500"></span> {{ suggested_per_month }}/mo</span>
+                {% endif %}
             </div>
         </div>
         {% endif %}
@@ -240,23 +248,31 @@ function toggleFullWidth() {
                         {% endfor %}
                         {% set ubmax = ubar_max[0] if ubar_max[0] > 0 else 1 %}
                         <div class="relative inline-flex items-end gap-px" style="height: 28px; min-width: 80px;" data-sort-value="{{ user_suggested }}">
+                            {% if user_suggested > 0 %}
                             {% set future_count = user_chart|selectattr('is_future')|list|length %}
                             {% set total_count = user_chart|length %}
                             {% if future_count > 0 %}
                             <div class="absolute right-0 border-t border-dashed border-amber-400 dark:border-amber-500 pointer-events-none" style="bottom: {{ (user_suggested / ubmax * 100)|round }}%; width: {{ (future_count / total_count * 100)|round }}%;"></div>
                             {% endif %}
+                            {% endif %}
                             {% for m in user_chart %}
+                            {% if m.is_future and user_suggested <= 0 %}
+                            <div class="flex-1" style="min-width: 3px;"></div>
+                            {% else %}
                             {% set bv = m.used if (m.is_past or m.is_current) else user_suggested %}
                             <div class="flex-1" style="height: {{ (bv / ubmax * 100)|round if bv > 0 else 0 }}%; min-width: 3px;">
                                 {% if m.is_future %}
-                                <div class="w-full h-full rounded-sm bg-gray-300 dark:bg-gray-600"></div>
+                                <div class="w-full h-full rounded-sm bg-amber-300 dark:bg-amber-600"></div>
                                 {% else %}
                                 <div class="w-full h-full rounded-sm bg-blue-400 dark:bg-blue-500"></div>
                                 {% endif %}
                             </div>
+                            {% endif %}
                             {% endfor %}
                         </div>
+                        {% if user_suggested > 0 %}
                         <span class="text-[9px] text-gray-400 dark:text-gray-500 ml-1">{{ user_suggested }}/mo</span>
+                        {% endif %}
                         {% endif %}
                     </td>
                     <td class="py-2.5 text-right text-gray-500 dark:text-gray-400" {% if last_login %}data-sort-value="{{ last_login.strftime('%Y%m%d%H%M') }}"{% else %}data-sort-value="0"{% endif %}>

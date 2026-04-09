@@ -1,57 +1,69 @@
-{% for rr_id, rr_title, rr_start, rr_end, rr_created_by, rr_active, rr_created_at, rr_creator, rr_dept_id, rr_dept_name, rr_color in review_requests %}
-<div class="rounded-lg p-4 mb-3 border-l-4" style="border-left-color:{{ rr_color }}">
-    <div class="flex items-center justify-between flex-wrap gap-2">
-        <div class="flex items-center gap-3">
-            <input type="color" value="{{ rr_color }}"
-                   onchange="htmx.ajax('POST','/review-requests/{{ rr_id }}/color',{target:'#review-requests-list',swap:'innerHTML',values:{color:this.value}})"
-                   class="w-7 h-7 rounded-full cursor-pointer border-0 p-0 bg-transparent flex-shrink-0"
-                   title="Change color">
-            <div>
-                <div class="font-semibold flex items-center gap-2">
-                    <span id="rr-title-display-{{ rr_id }}" class="cursor-pointer hover:underline"
-                          onclick="var d=this,f=document.getElementById('rr-title-form-{{ rr_id }}'),i=f.querySelector('input');d.classList.add('hidden');f.classList.remove('hidden');i.value=d.textContent.trim();i.focus();i.select()">{{ rr_title }}</span>
-                    <form id="rr-title-form-{{ rr_id }}" class="hidden inline-flex items-center gap-1"
-                          hx-post="/review-requests/{{ rr_id }}/title" hx-target="#review-requests-list" hx-swap="innerHTML">
-                        <input type="text" name="title" required
-                               class="px-2 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm font-semibold w-56"
-                               onkeydown="if(event.key==='Escape'){this.closest('form').classList.add('hidden');document.getElementById('rr-title-display-{{ rr_id }}').classList.remove('hidden')}">
-                        <button type="submit" class="text-green-600 dark:text-green-400 hover:text-green-800 text-sm font-medium">Save</button>
-                        <button type="button" class="text-gray-400 hover:text-gray-600 text-sm"
-                                onclick="this.closest('form').classList.add('hidden');document.getElementById('rr-title-display-{{ rr_id }}').classList.remove('hidden')">Cancel</button>
-                    </form>
-                    <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{{ rr_dept_name }}</span>
-                    {% if not rr_active %}
-                    <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Upcoming</span>
-                    {% endif %}
-                </div>
-                <div class="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                    {{ rr_start|fmtdate }} &ndash; {{ rr_end|fmtdate }}
-                    &middot; Created by {{ rr_creator }} on {{ rr_created_at|fmtdatetime }}
-                    &middot;
-                    <button onclick="var el=document.getElementById('review-status-{{ rr_id }}'); if(el.innerHTML.trim()){el.innerHTML=''}else{htmx.ajax('GET','/review-requests/{{ rr_id }}/status',{target:el,swap:'innerHTML'})}"
-                            class="text-blue-600 dark:text-blue-400 hover:underline">
-                        Status
-                    </button>
-                    &middot;
-                    <button hx-delete="/review-requests/{{ rr_id }}"
-                            hx-target="#review-requests-list"
-                            hx-swap="innerHTML"
-                            hx-confirm="Delete this review request?"
-                            class="text-red-600 dark:text-red-400 hover:underline">
-                        Delete
-                    </button>
+{% for rr_id, rr_title, rr_start, rr_end, rr_created_by, rr_active, rr_created_at, rr_creator, rr_dept_id, rr_dept_name, rr_color, rr_review_activated in review_requests %}
+<div class="rounded-lg mb-4 border-l-4 bg-gray-50 dark:bg-gray-700/30 overflow-hidden" style="border-left-color:{{ rr_color }}">
+    <div class="p-5">
+        <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3 min-w-0">
+                <input type="color" value="{{ rr_color }}"
+                       onchange="htmx.ajax('POST','/review-requests/{{ rr_id }}/color',{target:'#review-requests-list',swap:'innerHTML',values:{color:this.value}})"
+                       class="w-7 h-7 rounded-full cursor-pointer border-0 p-0 bg-transparent flex-shrink-0 mt-0.5"
+                       title="Change color">
+                <div class="space-y-2 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span id="rr-title-display-{{ rr_id }}" class="font-semibold text-base cursor-pointer hover:underline"
+                              onclick="var d=this,f=document.getElementById('rr-title-form-{{ rr_id }}'),i=f.querySelector('input');d.classList.add('hidden');f.classList.remove('hidden');i.value=d.textContent.trim();i.focus();i.select()">{{ rr_title }}</span>
+                        <form id="rr-title-form-{{ rr_id }}" class="hidden inline-flex items-center gap-1"
+                              hx-post="/review-requests/{{ rr_id }}/title" hx-target="#review-requests-list" hx-swap="innerHTML">
+                            <input type="text" name="title" required
+                                   class="px-2 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm font-semibold w-56"
+                                   onkeydown="if(event.key==='Escape'){this.closest('form').classList.add('hidden');document.getElementById('rr-title-display-{{ rr_id }}').classList.remove('hidden')}">
+                            <button type="submit" class="text-green-600 dark:text-green-400 hover:text-green-800 text-sm font-medium">Save</button>
+                            <button type="button" class="text-gray-400 hover:text-gray-600 text-sm"
+                                    onclick="this.closest('form').classList.add('hidden');document.getElementById('rr-title-display-{{ rr_id }}').classList.remove('hidden')">Cancel</button>
+                        </form>
+                        <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{{ rr_dept_name }}</span>
+                        {% if not rr_active %}
+                        <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Upcoming</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                        {{ rr_start|fmtdate }} &ndash; {{ rr_end|fmtdate }}
+                    </div>
+                    <div class="flex items-center gap-4 text-xs">
+                        <span class="text-gray-400 dark:text-gray-500">Created {{ rr_created_at|fmtdatetime }}</span>
+                        {% if rr_review_activated %}
+                        <span class="text-green-600 dark:text-green-400 font-medium">Activated {{ rr_review_activated|fmtdatetime }}</span>
+                        {% else %}
+                        <span class="text-gray-400 dark:text-gray-500 italic">Not yet activated</span>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center gap-3 pt-1">
+                        <button onclick="var el=document.getElementById('review-status-{{ rr_id }}'); if(el.innerHTML.trim()){el.innerHTML=''}else{htmx.ajax('GET','/review-requests/{{ rr_id }}/status',{target:el,swap:'innerHTML'})}"
+                                class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                            Status
+                        </button>
+                        <button hx-delete="/review-requests/{{ rr_id }}"
+                                hx-target="#review-requests-list"
+                                hx-swap="innerHTML"
+                                hx-confirm="Delete this review request?"
+                                class="text-sm text-red-600 dark:text-red-400 hover:underline">
+                            Delete
+                        </button>
+                    </div>
                 </div>
             </div>
+            <button hx-post="/review-requests/{{ rr_id }}/toggle"
+                    hx-target="#review-requests-list"
+                    hx-swap="innerHTML"
+                    class="px-4 py-2 text-sm font-medium rounded-lg flex-shrink-0
+                           {{ 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50' if rr_active else 'bg-green-600 hover:bg-green-700 text-white' }}">
+                {{ 'Pause review' if rr_active else 'Request review from users' }}
+            </button>
         </div>
-        <button hx-post="/review-requests/{{ rr_id }}/toggle"
-                hx-target="#review-requests-list"
-                hx-swap="innerHTML"
-                class="px-4 py-2 text-sm font-medium rounded-lg
-                       {{ 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50' if rr_active else 'bg-green-600 hover:bg-green-700 text-white' }}">
-            {{ 'Pause review' if rr_active else 'Request reviews' }}
-        </button>
+        <div id="review-status-{{ rr_id }}" class="mt-3"></div>
     </div>
-    <div id="review-status-{{ rr_id }}" class="mt-3"></div>
+    <div class="px-5 py-2 bg-gray-100 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600 text-xs text-gray-400 dark:text-gray-500 text-right">
+        Created by {{ rr_creator }}
+    </div>
 </div>
 {% endfor %}
 {% if not review_requests %}

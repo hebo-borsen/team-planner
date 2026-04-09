@@ -29,7 +29,7 @@
                 <label class="block text-xs font-medium mb-1">Color</label>
                 <div class="flex items-center gap-1.5">
                     <input type="hidden" name="color" id="rr-color" value="#f59e0b">
-                    {% set default_colors = ['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6'] %}
+                    {% set default_colors = ['#f59e0b', '#ef4444', '#8b5cf6', '#10b981'] %}
                     {% for c in default_colors %}
                     <button type="button" onclick="selectRRColor('{{ c }}')"
                             class="w-7 h-7 rounded-full border-2 transition-all rr-color-btn {{ 'border-gray-900 dark:border-white scale-110' if c == '#f59e0b' else 'border-transparent hover:border-gray-400' }}"
