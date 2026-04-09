@@ -3,7 +3,14 @@ from mysql.connector import pooling
 import hashlib
 import secrets
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import os
+
+TZ = ZoneInfo('Europe/Copenhagen')
+
+
+def _now():
+    return datetime.now(TZ).replace(tzinfo=None)
 
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
@@ -37,7 +44,7 @@ def authenticate_user(username, password):
     )
     user = cursor.fetchone()
     if user:
-        cursor.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user[0],))
+        cursor.execute("UPDATE users SET last_login = %s WHERE id = %s", (_now(), user[0]))
         conn.commit()
     cursor.close()
     conn.close()
@@ -426,7 +433,7 @@ def backfill_vacation_days(user_id, count, period_start):
                     """INSERT INTO vacation_days
                        (member_id, vacation_date, status, requested_by, approved_by, approved_at)
                        VALUES (%s, %s, 'approved', %s, %s, %s)""",
-                    (member_id, current, user_id, user_id, datetime.now()))
+                    (member_id, current, user_id, user_id, _now()))
                 added += 1
             except mysql.connector.IntegrityError:
                 pass  # already exists, still counts
@@ -540,7 +547,7 @@ def add_vacation_for_user(user_id, start_date, end_date, requested_by=None):
                    (member_id, vacation_date, status, requested_by, approved_by, approved_at)
                    VALUES (%s, %s, %s, %s, %s, %s)""",
                 (member_id, current, status, requested_by,
-                 requested_by, datetime.now())
+                 requested_by, _now())
             )
             added += 1
         except mysql.connector.IntegrityError:
@@ -1242,9 +1249,9 @@ def mark_review_seen(request_id, user_id):
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO review_responses (request_id, user_id, seen_at)
-        VALUES (%s, %s, NOW())
-        ON DUPLICATE KEY UPDATE seen_at = COALESCE(seen_at, NOW())
-    """, (request_id, user_id))
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE seen_at = COALESCE(seen_at, %s)
+    """, (request_id, user_id, _now(), _now()))
     conn.commit()
     cursor.close()
     conn.close()
@@ -1255,9 +1262,9 @@ def mark_review_decided(request_id, user_id):
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO review_responses (request_id, user_id, seen_at, decided_at)
-        VALUES (%s, %s, NOW(), NOW())
-        ON DUPLICATE KEY UPDATE decided_at = NOW(), seen_at = COALESCE(seen_at, NOW())
-    """, (request_id, user_id))
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE decided_at = %s, seen_at = COALESCE(seen_at, %s)
+    """, (request_id, user_id, _now(), _now(), _now(), _now()))
     conn.commit()
     cursor.close()
     conn.close()
@@ -1337,8 +1344,8 @@ def toggle_review_request_active(request_id):
     row = cursor.fetchone()
     if row and not row[0] and not row[1]:
         cursor.execute(
-            "UPDATE review_requests SET active = TRUE, review_activated = NOW() WHERE id = %s",
-            (request_id,))
+            "UPDATE review_requests SET active = TRUE, review_activated = %s WHERE id = %s",
+            (_now(), request_id))
     else:
         cursor.execute(
             "UPDATE review_requests SET active = NOT active WHERE id = %s",
