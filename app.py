@@ -421,7 +421,7 @@ def calendar_view(dept_id):
                     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
                     enriched = []
-                    for uid, display_name, entitlement, used, last_login in admin_summaries:
+                    for uid, display_name, entitlement, used, last_login, available in admin_summaries:
                         remaining = entitlement - used
                         user_suggested = round(remaining / months_left, 1)
                         user_usage = all_usage.get(uid, {})
@@ -443,7 +443,7 @@ def calendar_view(dept_id):
                                 d_m = date(d_m.year + 1, 1, 1)
                             else:
                                 d_m = date(d_m.year, d_m.month + 1, 1)
-                        enriched.append((uid, display_name, entitlement, used, chart, user_suggested, last_login))
+                        enriched.append((uid, display_name, entitlement, used, chart, user_suggested, last_login, available))
                     admin_summaries = enriched
                 break
 

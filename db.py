@@ -326,11 +326,19 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
     raw = cursor.fetchall()
     cursor.close()
     conn.close()
+    from datetime import date as _date
+    today = _date.today()
     results = []
     for uid, display_name, base_days, user_start, used, last_login in raw:
         base = base_days if base_days is not None else 34
         entitlement = _prorate_entitlement(base, user_start, earn_start, earn_end)
-        results.append((uid, display_name, entitlement, int(used), last_login))
+        accrual_start = max(earn_start, user_start) if user_start and user_start > earn_start else earn_start
+        months_elapsed = (today.year - accrual_start.year) * 12 + today.month - accrual_start.month
+        if months_elapsed < 0:
+            months_elapsed = 0
+        accrued = round(float(base) / 12 * months_elapsed, 1)
+        available = round(accrued - int(used), 1)
+        results.append((uid, display_name, entitlement, int(used), last_login, available))
     return results
 
 
