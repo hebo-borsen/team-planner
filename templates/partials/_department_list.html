@@ -1,16 +1,16 @@
 {% if departments %}
 <div class="space-y-2">
     {% for did, dname, dsort, dfun in departments %}
-    <div class="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+    <div class="flex items-center justify-between gap-3 px-3 py-2 bg-borsen-cream dark:bg-gray-700/30 rounded-lg">
         <form method="post" action="/departments/{{ did }}/name"
               hx-post="/departments/{{ did }}/name" hx-target="#department-list" hx-swap="innerHTML"
               class="inline-flex items-center gap-2 flex-1">
             <input type="text" name="name" value="{{ dname }}"
                    data-original="{{ dname }}"
                    oninput="this.nextElementSibling.classList.toggle('hidden', this.value.trim() === this.dataset.original)"
-                   class="font-medium text-sm bg-transparent border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:outline-none px-0 py-0 flex-1">
+                   class="font-medium text-sm bg-transparent border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-borsen-red focus:outline-none px-0 py-0 flex-1">
             <button type="submit"
-                    class="hidden px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded">
+                    class="hidden px-2 py-0.5 bg-borsen-red hover:bg-borsen-red-dark text-white text-xs font-medium rounded">
                 Save
             </button>
         </form>
@@ -22,7 +22,7 @@
                    hx-vals='{"is_fun": "{{ 0 if dfun else 1 }}"}'
                    hx-confirm="{{ 'This will enable fun mode for this department — users will see custom fonts and a fun/boring toggle.' if not dfun else 'This will disable fun mode for this department.' }}"
                    hx-on::after-request="window.location.reload()"
-                   class="rounded border-gray-300 dark:border-gray-600 text-blue-600">
+                   class="rounded border-gray-300 dark:border-gray-600 text-borsen-red">
             Fun dept
         </label>
         <button hx-delete="/departments/{{ did }}" hx-target="#department-list" hx-swap="innerHTML"

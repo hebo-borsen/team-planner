@@ -15,7 +15,7 @@ reload: ## Reload Flask (touch app.py inside container)
 up: ## Start all services
 	docker compose up -d
 	@echo "\n\033[32mStarted!\033[0m"
-	@echo "  Web UI:  http://localhost:5000"
+	@echo "  Web UI:  http://localhost:8501"
 	@echo "  MySQL:   localhost:3306"
 
 up-fg: ## Start all services in foreground

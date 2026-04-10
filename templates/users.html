@@ -15,9 +15,9 @@
                         <input type="text" name="display_name" value="{{ udisplay or uname }}"
                                data-original="{{ udisplay or uname }}"
                                oninput="this.nextElementSibling.classList.toggle('hidden', this.value.trim() === this.dataset.original)"
-                               class="font-semibold text-base bg-transparent border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:outline-none px-0 py-0">
+                               class="font-semibold text-base bg-transparent border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-borsen-red focus:outline-none px-0 py-0">
                         <button type="submit"
-                                class="hidden px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded">
+                                class="hidden px-2 py-0.5 bg-borsen-red hover:bg-borsen-red-dark text-white text-xs font-medium rounded">
                             Save
                         </button>
                     </form>
@@ -38,23 +38,7 @@
                 </span>
                 {% endif %}
             </div>
-            <div class="inline-flex gap-2">
-                <form method="post" action="/users/{{ uid }}/toggle-active" class="inline">
-                    <button type="submit"
-                            class="px-3 py-1 {{ 'bg-red-600 hover:bg-red-700' if uactive else 'bg-green-600 hover:bg-green-700' }} text-white text-xs font-medium rounded">
-                        {{ 'Hide' if uactive else 'Show' }}
-                    </button>
-                </form>
-                <button onclick="document.getElementById('pw-modal-{{ uid }}').classList.remove('hidden')"
-                        class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded">
-                    Change Password
-                </button>
-                {% if uid != user_id %}
-                <button onclick="document.getElementById('delete-modal-{{ uid }}').classList.remove('hidden')"
-                        class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded">
-                    Delete
-                </button>
-                {% endif %}
+            <div class="flex items-start gap-2 flex-wrap justify-end">
                 {% if urole == 'admin' and uid != user_id %}
                 <form method="post" action="/users/{{ uid }}/role" class="inline">
                     <input type="hidden" name="role" value="user">
@@ -72,11 +56,35 @@
                     </button>
                 </form>
                 {% endif %}
+                <details class="group">
+                    <summary class="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-xs font-medium rounded cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+                        Danger zone
+                        <span class="transition-transform group-open:rotate-180">▾</span>
+                    </summary>
+                    <div class="mt-2 flex gap-2 flex-wrap justify-end">
+                        <button onclick="document.getElementById('pw-modal-{{ uid }}').classList.remove('hidden')"
+                                class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded">
+                            Change Password
+                        </button>
+                        <form method="post" action="/users/{{ uid }}/toggle-active" class="inline">
+                            <button type="submit"
+                                    class="px-3 py-1 {{ 'bg-red-600 hover:bg-red-700' if uactive else 'bg-green-600 hover:bg-green-700' }} text-white text-xs font-medium rounded">
+                                {{ 'Hide' if uactive else 'Show' }}
+                            </button>
+                        </form>
+                        {% if uid != user_id %}
+                        <button onclick="document.getElementById('delete-modal-{{ uid }}').classList.remove('hidden')"
+                                class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded">
+                            Delete
+                        </button>
+                        {% endif %}
+                    </div>
+                </details>
             </div>
         </div>
 
         <!-- Row 2: Holiday settings -->
-        <div class="px-5 py-3 bg-gray-50 dark:bg-gray-700/30 border-t border-gray-200 dark:border-gray-700 flex items-center gap-8 flex-wrap text-sm">
+        <div class="px-5 py-3 bg-borsen-cream-dark dark:bg-gray-700/30 border-t border-gray-200 dark:border-gray-700 flex items-center gap-8 flex-wrap text-sm">
             <div>
                 <div class="flex items-center gap-2">
                     <span class="text-gray-500 dark:text-gray-400">Department:</span>
@@ -100,7 +108,7 @@
                     </span>
                     {% endif %}
                     <button type="button" onclick="document.getElementById('secondary-modal-{{ uid }}').classList.remove('hidden')"
-                            class="px-1.5 py-0.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded">
+                            class="px-1.5 py-0.5 text-xs text-borsen-red dark:text-red-400 hover:bg-borsen-red-light dark:hover:bg-red-900/20 rounded">
                         {{ 'Edit' if user_secondary else 'Add' }}
                     </button>
                 </div>
@@ -115,10 +123,10 @@
                                 <div class="space-y-2 mb-4">
                                     {% for did, dname, dsort, dfun in departments %}
                                     {% if did != udept_id %}
-                                    <label class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <label class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-borsen-cream dark:hover:bg-gray-700">
                                         <input type="checkbox" name="secondary_department_ids" value="{{ did }}"
                                                {{ 'checked' if did in user_secondary else '' }}
-                                               class="rounded border-gray-300 dark:border-gray-600 text-blue-600">
+                                               class="rounded border-gray-300 dark:border-gray-600 text-borsen-red">
                                         <span class="text-sm">{{ dname }}</span>
                                     </label>
                                     {% endif %}
@@ -130,7 +138,7 @@
                                         Cancel
                                     </button>
                                     <button type="submit"
-                                            class="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white">
+                                            class="px-4 py-2 text-sm font-medium rounded-lg bg-borsen-red hover:bg-borsen-red-dark text-white">
                                         Save
                                     </button>
                                 </div>
@@ -148,7 +156,7 @@
                            oninput="this.nextElementSibling.classList.toggle('hidden', this.value == this.dataset.original)"
                            class="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm text-center">
                     <button type="submit"
-                            class="hidden px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded">
+                            class="hidden px-2 py-1 bg-borsen-red hover:bg-borsen-red-dark text-white text-xs font-medium rounded">
                         Save
                     </button>
                 </form>
@@ -161,7 +169,7 @@
                            oninput="this.nextElementSibling.classList.toggle('hidden', this.value == this.dataset.original)"
                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm">
                     <button type="submit"
-                            class="hidden px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded">
+                            class="hidden px-2 py-1 bg-borsen-red hover:bg-borsen-red-dark text-white text-xs font-medium rounded">
                         Save
                     </button>
                 </form>
@@ -197,7 +205,7 @@
                     Cancel
                 </button>
                 <button type="submit"
-                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                        class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
                     Change Password
                 </button>
             </div>

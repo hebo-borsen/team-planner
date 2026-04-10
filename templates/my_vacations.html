@@ -4,7 +4,7 @@
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">My Vacations</h1>
     <button onclick="document.getElementById('request-modal').classList.remove('hidden')"
-            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg text-sm">
+            class="px-6 py-3 bg-borsen-red hover:bg-borsen-red-dark text-white font-medium rounded-lg shadow-lg text-sm">
         + Add Vacation
     </button>
 </div>
@@ -13,7 +13,7 @@
 <div class="space-y-4">
     {% for g in groups %}
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between gap-4">
+        <div class="px-4 py-3 bg-borsen-cream dark:bg-gray-700/50 flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 flex-wrap">
                 <span class="text-sm text-gray-500 dark:text-gray-400">
                     {% if g.count == 1 %}
@@ -66,7 +66,7 @@
                         {% set is_weekend = dow >= 5 %}
                         <td class="px-1.5 py-1 text-center rounded
                             {% if is_requested %}
-                                bg-blue-400 dark:bg-blue-600 text-white font-semibold
+                                bg-borsen-pink dark:bg-borsen-pink text-white font-semibold
                             {% elif is_holiday %}
                                 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400
                             {% elif is_weekend %}
@@ -84,7 +84,7 @@
         </div>
 
         {% if g.created_by or g.created_at %}
-        <div class="px-4 py-2 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500">
+        <div class="px-4 py-2 bg-borsen-cream dark:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500">
             {% if g.created_by %}Added by {{ g.created_by }}{% endif %}
             {% if g.created_at %}{% if g.created_by %} &middot; {% endif %}{{ g.created_at|fmtdatetime }}{% endif %}
         </div>
@@ -154,7 +154,7 @@
                     Cancel
                 </button>
                 <button type="submit"
-                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                        class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
                     Add Vacation
                 </button>
             </div>

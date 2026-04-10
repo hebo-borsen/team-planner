@@ -33,7 +33,7 @@ function saveCalRange(from, to) {
             <a href="{{ cal_base }}?from={{ p.from }}&to={{ p.to }}"
                onclick="saveCalRange('{{ p.from }}', '{{ p.to }}')"
                class="px-3 py-1.5 text-xs font-medium rounded-lg
-                      {{ 'bg-blue-600 text-white' if p.active else 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' }}">
+                      {{ 'bg-borsen-red text-white' if p.active else 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' }}">
                 {{ p.label }}
             </a>
             {% endfor %}
@@ -97,7 +97,7 @@ function toggleFullWidth() {
 </div>
 
 <div class="flex items-center gap-3 mt-3 text-xs text-gray-500 dark:text-gray-400">
-    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-blue-500"></span> Vacation</span>
+    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-borsen-pink"></span> Vacation</span>
     {% if review_dates %}
     <span class="inline-flex items-center gap-1"><span class="relative inline-block w-4 h-4 rounded bg-gray-100 dark:bg-gray-700"><span class="review-tri" style="background:#f59e0b"></span></span> Review period</span>
     {% endif %}
@@ -110,7 +110,7 @@ function toggleFullWidth() {
         {% endif %}
     </div>
     <button onclick="document.getElementById('vacation-modal').classList.remove('hidden')"
-            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-lg text-sm">
+            class="px-6 py-3 bg-borsen-red hover:bg-borsen-red-dark text-white font-medium rounded-lg shadow-lg text-sm">
         + Add Vacation
     </button>
 </div>
@@ -128,11 +128,11 @@ function toggleFullWidth() {
     </p>
     {% endif %}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+        <div class="bg-borsen-cream dark:bg-gray-700/50 rounded-lg p-4">
             <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ period_summary.remaining|round|int }}{% if period_summary.remaining != period_summary.remaining|round|int %} <span class="text-xs font-normal text-gray-400 dark:text-gray-500">(rounded from {{ period_summary.remaining }})</span>{% endif %}</div>
             <div class="text-sm text-gray-500 dark:text-gray-400">Projected remaining holiday days in period</div>
         </div>
-        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+        <div class="bg-borsen-cream dark:bg-gray-700/50 rounded-lg p-4">
             {% set available_exact = (vacation_summary.accrued - vacation_summary.used)|round(1) %}
             <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ available_exact|round|int }}{% if available_exact != available_exact|round|int %} <span class="text-xs font-normal text-gray-400 dark:text-gray-500">(rounded from {{ available_exact }})</span>{% endif %}</div>
             <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">Holiday days available as of <strong>{{ today|fmtdate }}</strong></div>
@@ -155,7 +155,7 @@ function toggleFullWidth() {
         </div>
 
         {% if monthly_chart %}
-        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+        <div class="bg-borsen-cream dark:bg-gray-700/50 rounded-lg p-4">
             <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400">Days off per month</h3>
             <p class="text-xs text-gray-400 dark:text-gray-500 mb-3">Historical and projected</p>
             {% set bar_max = [suggested_per_month] %}
@@ -178,24 +178,36 @@ function toggleFullWidth() {
                     {% if total <= 0 %}
                     <div class="flex-1"></div>
                     {% else %}
+                    {% set total_px = total / bmax * 100 %}
+                    {% set sug_px = total_px * suggested / total if total > 0 else 0 %}
+                    {% set planned_px = total_px * planned / total if total > 0 else 0 %}
                     <div class="flex-1 flex flex-col items-center h-full justify-end">
-                        <div class="w-full relative flex flex-col items-stretch justify-end" style="height: {{ (total / bmax * 100)|round }}%;">
+                        <div class="w-full relative flex flex-col items-stretch justify-end" style="height: {{ total_px|round }}%;">
                             {% if suggested > 0 %}
-                            <div class="w-full rounded-t bg-amber-300 dark:bg-amber-600" style="flex: {{ suggested }} {{ suggested }} 0%;"></div>
+                            <div class="w-full rounded-t bg-amber-300 dark:bg-amber-600 relative" style="flex: {{ suggested }} {{ suggested }} 0%;">
+                                {% if sug_px > 30 %}
+                                <span class="absolute inset-x-0 top-1.5 text-center text-xs font-semibold" style="color: var(--ink);">{{ suggested|round|int }}</span>
+                                {% endif %}
+                            </div>
                             {% endif %}
                             {% if planned > 0 %}
-                            <div class="w-full {{ 'rounded-t' if suggested <= 0 else '' }} bg-blue-400 dark:bg-blue-500" style="flex: {{ planned }} {{ planned }} 0%;"></div>
+                            <div class="w-full {{ 'rounded-t' if suggested <= 0 else '' }} bg-borsen-pink dark:bg-borsen-pink relative" style="flex: {{ planned }} {{ planned }} 0%;">
+                                {% if planned_px > 30 %}
+                                <span class="absolute inset-x-0 top-1.5 text-center text-xs font-semibold" style="color: var(--ink);">{{ planned|round|int }}</span>
+                                {% endif %}
+                            </div>
                             {% endif %}
                         </div>
                     </div>
                     {% endif %}
                     {% else %}
+                    {% set bar_px = m.used / bmax * 100 %}
                     <div class="flex-1 flex flex-col items-center h-full justify-end">
-                        <div class="w-full relative flex items-end justify-center" style="height: {{ (m.used / bmax * 100)|round }}%;">
-                            {% if m.used > 0 %}
-                            <span class="absolute inset-x-0 top-1.5 text-center text-[9px] font-medium text-white dark:text-gray-200 drop-shadow-sm">{{ m.used|round|int }}</span>
+                        <div class="w-full relative flex items-end justify-center" style="height: {{ bar_px|round }}%;">
+                            {% if m.used > 0 and bar_px > 30 %}
+                            <span class="absolute inset-x-0 top-1.5 text-center text-xs font-semibold" style="color: var(--ink);">{{ m.used|round|int }}</span>
                             {% endif %}
-                            <div class="w-full h-full rounded-t bg-blue-400 dark:bg-blue-500"></div>
+                            <div class="w-full h-full rounded-t bg-borsen-pink dark:bg-borsen-pink"></div>
                         </div>
                     </div>
                     {% endif %}
@@ -209,7 +221,7 @@ function toggleFullWidth() {
             </div>
             {% set has_future_planned = monthly_chart|selectattr('is_future')|selectattr('used', 'gt', 0)|list|length > 0 %}
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] text-gray-400 dark:text-gray-500">
-                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-blue-400 dark:bg-blue-500"></span> Used{% if has_future_planned %} / Planned{% endif %}</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-borsen-pink dark:bg-borsen-pink"></span> Used{% if has_future_planned %} / Planned{% endif %}</span>
                 {% if suggested_per_month > 0 %}
                 <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-amber-300 dark:bg-amber-600"></span> Suggested ({{ suggested_per_month }}/mo)</span>
                 {% endif %}
@@ -234,7 +246,7 @@ function toggleFullWidth() {
                     <th class="text-right py-2 font-medium" onclick="sortTable(3)">Remaining <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-right py-2 font-medium" onclick="sortTable(4)">Available <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-left py-2 font-medium pl-4" onclick="sortTable(5)">Days/month <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium" onclick="sortTable(6)">Last login <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium whitespace-nowrap" style="width: 1%;" onclick="sortTable(6)">Last login <span class="sort-icon text-gray-400">&#8597;</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -262,37 +274,44 @@ function toggleFullWidth() {
                             {% if bv > ubar_max[0] %}{% set _ = ubar_max.pop() %}{% set _ = ubar_max.append(bv) %}{% endif %}
                         {% endfor %}
                         {% set ubmax = ubar_max[0] if ubar_max[0] > 0 else 1 %}
-                        <div class="relative inline-flex items-end gap-px" style="height: 28px; min-width: 80px;" data-sort-value="{{ user_suggested }}">
-                            {% for m in user_chart %}
-                            {% if m.is_future %}
-                            {% set planned = m.used %}
-                            {% set sug = user_suggested if user_suggested > 0 else 0 %}
-                            {% set total = planned + sug %}
-                            {% if total <= 0 %}
-                            <div class="flex-1" style="min-width: 3px;"></div>
-                            {% else %}
-                            <div class="flex-1 flex flex-col justify-end" style="height: {{ (total / ubmax * 100)|round }}%; min-width: 3px;">
-                                {% if sug > 0 %}
-                                <div class="w-full rounded-t-sm bg-amber-300 dark:bg-amber-600" style="flex: {{ sug }} {{ sug }} 0%;"></div>
+                        <div class="inline-block align-bottom" style="width: 132px;" data-sort-value="{{ user_suggested }}">
+                            <div class="relative flex items-end gap-px" style="height: 28px;">
+                                {% for m in user_chart %}
+                                {% if m.is_future %}
+                                {% set planned = m.used %}
+                                {% set sug = user_suggested if user_suggested > 0 else 0 %}
+                                {% set total = planned + sug %}
+                                {% if total <= 0 %}
+                                <div class="flex-1"></div>
+                                {% else %}
+                                <div class="flex-1 flex flex-col justify-end" style="height: {{ (total / ubmax * 100)|round }}%;">
+                                    {% if sug > 0 %}
+                                    <div class="w-full rounded-t-sm bg-amber-300 dark:bg-amber-600" style="flex: {{ sug }} {{ sug }} 0%;"></div>
+                                    {% endif %}
+                                    {% if planned > 0 %}
+                                    <div class="w-full {{ 'rounded-t-sm' if sug <= 0 else '' }} bg-borsen-pink dark:bg-borsen-pink" style="flex: {{ planned }} {{ planned }} 0%;"></div>
+                                    {% endif %}
+                                </div>
                                 {% endif %}
-                                {% if planned > 0 %}
-                                <div class="w-full {{ 'rounded-t-sm' if sug <= 0 else '' }} bg-blue-400 dark:bg-blue-500" style="flex: {{ planned }} {{ planned }} 0%;"></div>
+                                {% else %}
+                                <div class="flex-1" style="height: {{ (m.used / ubmax * 100)|round if m.used > 0 else 0 }}%;">
+                                    <div class="w-full h-full rounded-sm bg-borsen-pink dark:bg-borsen-pink"></div>
+                                </div>
                                 {% endif %}
+                                {% endfor %}
                             </div>
-                            {% endif %}
-                            {% else %}
-                            <div class="flex-1" style="height: {{ (m.used / ubmax * 100)|round if m.used > 0 else 0 }}%; min-width: 3px;">
-                                <div class="w-full h-full rounded-sm bg-blue-400 dark:bg-blue-500"></div>
+                            <div class="flex gap-px mt-0.5">
+                                {% for m in user_chart %}
+                                <div class="flex-1 text-center text-[9px] text-gray-400 dark:text-gray-500 leading-none">{{ m.label[0] }}</div>
+                                {% endfor %}
                             </div>
-                            {% endif %}
-                            {% endfor %}
                         </div>
                         {% if user_suggested > 0 %}
                         <span class="text-[9px] text-gray-400 dark:text-gray-500 ml-1">{{ user_suggested }}/mo</span>
                         {% endif %}
                         {% endif %}
                     </td>
-                    <td class="py-2.5 text-right text-gray-500 dark:text-gray-400" {% if last_login %}data-sort-value="{{ last_login.strftime('%Y%m%d%H%M') }}"{% else %}data-sort-value="0"{% endif %}>
+                    <td class="py-2.5 text-right text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" style="width: 1%;" {% if last_login %}data-sort-value="{{ last_login.strftime('%Y%m%d%H%M') }}"{% else %}data-sort-value="0"{% endif %}>
                         {% if last_login %}{{ last_login|fmtdatetime }}{% else %}<span class="text-gray-400 dark:text-gray-600">Never</span>{% endif %}
                     </td>
                 </tr>
@@ -339,7 +358,7 @@ function toggleFullWidth() {
 
     function clearSelection() {
         document.querySelectorAll('.cal-cell.ring-2').forEach(function(el) {
-            el.classList.remove('ring-2', 'ring-blue-500', 'ring-red-500', 'ring-inset');
+            el.classList.remove('ring-2', 'ring-borsen-red', 'ring-red-500', 'ring-inset');
         });
     }
 
@@ -382,7 +401,7 @@ function toggleFullWidth() {
         clearSelection();
         var a = from < to ? from : to;
         var b = from < to ? to : from;
-        var ringColor = dragMode === 'vacation' ? 'ring-red-500' : 'ring-blue-500';
+        var ringColor = dragMode === 'vacation' ? 'ring-red-500' : 'ring-borsen-red';
         row.querySelectorAll('.cal-cell').forEach(function(el) {
             var d = el.dataset.date;
             if (d >= a && d <= b) {
@@ -519,7 +538,7 @@ function toggleFullWidth() {
                     Cancel
                 </button>
                 <button type="submit"
-                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                        class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
                     Add Vacation
                 </button>
             </div>

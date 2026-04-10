@@ -78,6 +78,29 @@ Public holidays (`period_holidays` table) are associated with a **spending perio
 - `operation_log`: Audit log with nullable `user_id`, `operation_type` (e.g. `holiday_recalculation`, `setting_update`), and `message`
 - `schema_migrations`: Tracks which migrations have been applied
 
+### Styling — Børsen Brand
+
+The UI follows the Børsen (borsen.dk) visual identity. Custom colors are defined in the Tailwind config in `base.html`:
+
+| Token | Hex | Usage |
+|---|---|---|
+| `borsen-red` | `#c8102e` | Primary action buttons, active nav tabs |
+| `borsen-red-dark` | `#a00d24` | Button hover states |
+| `borsen-red-light` | `#fde8eb` | Light backgrounds for badges, active dropdown items |
+| `borsen-pink` | `#db3d7f` | Vacation day indicators (calendar grid, bar charts, mini calendars) |
+| `borsen-pink-dark` | `#c22e6a` | Pink hover/dark variant |
+| `borsen-black` | `#1a1a1a` | Logo text color |
+| `borsen-cream` | `#f5f0e8` | Page background (warm off-white) |
+| `borsen-cream-dark` | `#e8e0d4` | Nav bars, card inner sections |
+
+**Rules:**
+- Both nav bars (secondary slim bar + primary nav) use `borsen-cream-dark` background with dark text — never black/dark backgrounds
+- Action buttons use `borsen-red`, not Tailwind blue
+- Vacation/holiday indicators use `borsen-pink`, not Tailwind blue
+- Focus rings and interactive link text use `borsen-red`
+- The `info` flash message keeps Tailwind blue (semantic color, not brand)
+- All timestamps use Copenhagen timezone via `db._now()` — never MySQL `NOW()`
+
 ### Database Migrations
 
 Migrations run automatically on app startup via `migrate.py`. They are tracked in the `schema_migrations` table. To add a schema change, create the next numbered `.sql` file in `migrations/` (e.g. `006_add_something.sql`). Keep migrations idempotent — the runner tolerates duplicate column errors (MySQL 1060).
