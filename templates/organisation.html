@@ -13,7 +13,7 @@
                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-64">
         </div>
         <button type="submit"
-                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
             Add Department
         </button>
     </form>
@@ -54,7 +54,7 @@
     </p>
     <div class="space-y-2">
         {% for pid, plabel, pstart, pend, estart, eend in periods %}
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2.5 bg-gray-50 dark:bg-gray-700/30 rounded-lg text-sm">
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2.5 bg-borsen-cream dark:bg-gray-700/30 rounded-lg text-sm">
             <span class="font-medium w-24">{{ plabel }}</span>
             <span class="text-gray-500 dark:text-gray-400">Earning period: <span class="text-gray-700 dark:text-gray-300">{{ estart|fmtdate }} – {{ eend|fmtdate }}</span></span>
             <span class="text-gray-500 dark:text-gray-400">Holiday period: <span class="text-gray-700 dark:text-gray-300">{{ pstart|fmtdate }} – {{ pend|fmtdate }}</span></span>

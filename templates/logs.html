@@ -25,7 +25,7 @@
             </select>
         </div>
         <button type="submit"
-                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
             Filter
         </button>
         {% if filter_user_id or filter_operation_type %}
@@ -48,7 +48,7 @@
         </thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             {% for id, user_id, username, op_type, message, created_at in entries %}
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+            <tr class="hover:bg-borsen-cream dark:hover:bg-gray-800/50">
                 <td class="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ created_at|fmtdatetime }}</td>
                 <td class="px-4 py-3 whitespace-nowrap">{{ username or '-' }}</td>
                 <td class="px-4 py-3 whitespace-nowrap">
