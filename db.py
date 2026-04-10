@@ -921,11 +921,14 @@ def get_vacations_for_date_range(start_date, end_date):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT u.id, COALESCE(u.display_name, u.username) as display,
-               vd.vacation_date, vd.status
+               vd.vacation_date, vd.status,
+               vd.created_at,
+               COALESCE(creator.display_name, vd.requested_by) AS created_by_name
         FROM users u
         LEFT JOIN team_members tm ON tm.name = u.username
         LEFT JOIN vacation_days vd ON tm.id = vd.member_id
             AND vd.vacation_date BETWEEN %s AND %s
+        LEFT JOIN users creator ON creator.username = vd.requested_by
         ORDER BY COALESCE(u.display_name, u.username), vd.vacation_date
     """, (start_date, end_date))
     vacations = cursor.fetchall()

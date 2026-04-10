@@ -73,13 +73,15 @@ tr.cal-hover td:hover::after {
                 {% for day in days %}
                 {% set cell_type = 'vacation' if day in user_vacs else ('weekend' if day in weekend_days else ('holiday' if day in holiday_dict else 'empty')) %}
                 {% set rc = u_cells.get(day) %}
+                {% set vac_meta = user_vacs[day] if day in user_vacs else None %}
                 <td class="{{ 'cal-cell' if selectable else '' }} px-1 py-1.5 text-center border border-gray-200 dark:border-gray-700
                     {{ 'cursor-pointer' if selectable else '' }}
                     {{ 'bg-gray-200 dark:bg-gray-700' if day in weekend_days else '' }}
                     {{ 'bg-green-100 dark:bg-green-900/30' if day in holiday_dict and day not in weekend_days and day not in user_vacs else '' }}
                     {{ 'bg-borsen-pink text-white font-bold' if day in user_vacs else '' }}
                     {{ 'relative' if rc and day not in weekend_days and day not in holiday_dict else '' }}"
-                    data-date="{{ day.isoformat() }}" data-type="{{ cell_type }}">
+                    data-date="{{ day.isoformat() }}" data-type="{{ cell_type }}"
+                    {% if vac_meta %}data-created-at="{{ vac_meta.created_at|fmtdatetime }}" data-created-by="{{ vac_meta.created_by or 'Unknown' }}"{% endif %}>
                     {{ 'V' if day in user_vacs else '' }}
                     {% if rc and day not in weekend_days and day not in holiday_dict %}{% if rc[2] %}<svg class="review-tick" viewBox="0 0 10 10" style="opacity:{{ rc[1] }}"><path d="M2 5.5L4.5 8L8.5 2.5" stroke="{{ rc[0] }}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>{% else %}<span class="review-tri" style="background:{{ rc[0] }};opacity:{{ rc[1] }}"></span>{% endif %}{% endif %}
                 </td>
