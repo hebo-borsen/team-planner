@@ -20,7 +20,7 @@ DB_CONFIG = {
     'password': os.getenv('DB_PASSWORD', 'vacation_pass')
 }
 
-_pool = pooling.MySQLConnectionPool(pool_name="app", pool_size=5, **DB_CONFIG)
+_pool = pooling.MySQLConnectionPool(pool_name="app", pool_size=int(os.getenv('DB_POOL_SIZE', 30)), **DB_CONFIG)
 
 
 def get_db_connection():
