@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Team Vacation Planner{% endblock %}</title>
-    <link id="favicon" rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦜</text></svg>">
+    <link id="favicon" rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -386,7 +386,7 @@
         var origTitle = document.title;
         var parrotFrames = [];
         var parrotInterval = null;
-        var parrotStatic = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦜</text></svg>";
+        var defaultFavicon = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>";
         (function buildParrotFrames() {
             var canvas = document.createElement('canvas');
             canvas.width = 64; canvas.height = 64;
@@ -726,7 +726,7 @@
             if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
             document.title = origTitle;
             if (parrotInterval) { clearInterval(parrotInterval); parrotInterval = null; }
-            document.getElementById('favicon').href = parrotStatic;
+            document.getElementById('favicon').href = defaultFavicon;
 
             items.forEach(function(it) {
                 if (it.isQuote || it.isHammer) {
