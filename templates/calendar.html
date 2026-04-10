@@ -259,38 +259,31 @@ function toggleFullWidth() {
                     </td>
                     <td class="py-2 pl-4">
                         {% if user_chart %}
-                        {% set ubar_max = [user_suggested] %}
-                        {% for m in user_chart %}
-                            {% if m.is_past or m.is_current %}
-                                {% set bv = m.used %}
-                            {% else %}
-                                {% set bv = m.used + (user_suggested if user_suggested > 0 else 0) %}
-                            {% endif %}
-                            {% if bv > ubar_max[0] %}{% set _ = ubar_max.pop() %}{% set _ = ubar_max.append(bv) %}{% endif %}
-                        {% endfor %}
-                        {% set ubmax = ubar_max[0] if ubar_max[0] > 0 else 1 %}
-                        <div class="inline-block align-bottom" style="width: 132px;" data-sort-value="{{ user_suggested }}">
-                            <div class="relative flex items-end gap-px" style="height: 28px;">
+                        {% set DAY_PX = 3 %}
+                        {% set CAP_PX = 45 %}
+                        <div class="inline-block align-bottom" style="width: 180px;" data-sort-value="{{ user_suggested }}">
+                            <div class="relative flex items-end gap-px overflow-hidden" style="height: {{ CAP_PX }}px;">
                                 {% for m in user_chart %}
-                                {% if m.is_future %}
                                 {% set planned = m.used %}
-                                {% set sug = user_suggested if user_suggested > 0 else 0 %}
-                                {% set total = planned + sug %}
-                                {% if total <= 0 %}
+                                {% set sug = user_suggested if m.is_future and user_suggested > 0 else 0 %}
+                                {% set planned_px = (planned * DAY_PX)|round|int %}
+                                {% set sug_px = (sug * DAY_PX)|round|int %}
+                                {% set clipped = (planned_px + sug_px) > CAP_PX %}
+                                {% if planned_px + sug_px <= 0 %}
                                 <div class="flex-1"></div>
                                 {% else %}
-                                <div class="flex-1 flex flex-col justify-end" style="height: {{ (total / ubmax * 100)|round }}%;">
-                                    {% if sug > 0 %}
-                                    <div class="w-full rounded-t-sm bg-amber-300 dark:bg-amber-600" style="flex: {{ sug }} {{ sug }} 0%;"></div>
+                                <div class="flex-1 flex flex-col justify-end relative" style="height: 100%;">
+                                    {% if sug_px > 0 %}
+                                    <div class="w-full bg-amber-300 dark:bg-amber-600 {{ 'rounded-t-sm' if not clipped else '' }}" style="height: {{ sug_px }}px;"></div>
                                     {% endif %}
-                                    {% if planned > 0 %}
-                                    <div class="w-full {{ 'rounded-t-sm' if sug <= 0 else '' }} bg-borsen-pink dark:bg-borsen-pink" style="flex: {{ planned }} {{ planned }} 0%;"></div>
+                                    {% if planned_px > 0 %}
+                                    <div class="w-full bg-borsen-pink dark:bg-borsen-pink {{ 'rounded-t-sm' if sug_px == 0 and not clipped else '' }}" style="height: {{ planned_px }}px;"></div>
                                     {% endif %}
-                                </div>
-                                {% endif %}
-                                {% else %}
-                                <div class="flex-1" style="height: {{ (m.used / ubmax * 100)|round if m.used > 0 else 0 }}%;">
-                                    <div class="w-full h-full rounded-sm bg-borsen-pink dark:bg-borsen-pink"></div>
+                                    {% if clipped %}
+                                    <svg class="absolute left-0 w-full pointer-events-none" style="top: 0; height: 5px;" viewBox="0 0 12 5" preserveAspectRatio="none">
+                                        <path d="M0,3.5 L2,1 L4,3.5 L6,1 L8,3.5 L10,1 L12,3.5" stroke="var(--blue-dark)" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    {% endif %}
                                 </div>
                                 {% endif %}
                                 {% endfor %}
