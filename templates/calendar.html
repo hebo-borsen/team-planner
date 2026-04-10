@@ -103,12 +103,7 @@ function toggleFullWidth() {
     {% endif %}
 </div>
 
-<div class="flex items-center justify-between mt-4">
-    <div class="text-sm text-gray-500 dark:text-gray-400">
-        {% if total_vacations > 0 %}
-        Total approved vacation days: <strong>{{ total_vacations }}</strong>
-        {% endif %}
-    </div>
+<div class="flex items-center justify-end mt-4">
     <button onclick="document.getElementById('vacation-modal').classList.remove('hidden')"
             class="px-6 py-3 bg-borsen-red hover:bg-borsen-red-dark text-white font-medium rounded-lg shadow-lg text-sm">
         + Add Vacation
@@ -223,7 +218,7 @@ function toggleFullWidth() {
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] text-gray-400 dark:text-gray-500">
                 <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-borsen-pink dark:bg-borsen-pink"></span> Used{% if has_future_planned %} / Planned{% endif %}</span>
                 {% if suggested_per_month > 0 %}
-                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-amber-300 dark:bg-amber-600"></span> Suggested ({{ suggested_per_month }}/mo)</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-amber-300 dark:bg-amber-600"></span> Required burn rate ({{ suggested_per_month }}/mo)</span>
                 {% endif %}
             </div>
         </div>
@@ -495,6 +490,59 @@ function toggleFullWidth() {
         dragRow = null;
         dragMode = null;
     });
+})();
+
+(function() {
+    var tip = document.createElement('div');
+    tip.id = 'cal-vac-tooltip';
+    tip.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;' +
+        'background:rgba(26,26,26,0.94);color:#fff;padding:5px 8px;border-radius:4px;' +
+        'font-size:11px;line-height:1.35;white-space:nowrap;' +
+        'box-shadow:0 2px 8px rgba(0,0,0,0.25);display:none;';
+    document.body.appendChild(tip);
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function show(cell) {
+        var createdAt = cell.dataset.createdAt || '';
+        var createdBy = cell.dataset.createdBy || '';
+        if (!createdAt && !createdBy) return false;
+        tip.innerHTML =
+            '<div><span style="opacity:0.65">Created:</span> ' + esc(createdAt) + '</div>' +
+            '<div><span style="opacity:0.65">By:</span> ' + esc(createdBy) + '</div>';
+        tip.style.display = 'block';
+        return true;
+    }
+
+    function position(x, y) {
+        var dx = 14, dy = 14;
+        var tw = tip.offsetWidth, th = tip.offsetHeight;
+        if (x + dx + tw > window.innerWidth) dx = -tw - 10;
+        if (y + dy + th > window.innerHeight) dy = -th - 10;
+        tip.style.left = (x + dx) + 'px';
+        tip.style.top = (y + dy) + 'px';
+    }
+
+    function hide() {
+        tip.style.display = 'none';
+    }
+
+    document.addEventListener('mousemove', function(e) {
+        if (e.buttons) { hide(); return; }
+        var cell = e.target.closest('.cal-cell[data-type="vacation"]');
+        if (cell && cell.dataset.createdAt) {
+            if (show(cell)) position(e.clientX, e.clientY);
+        } else {
+            hide();
+        }
+    });
+
+    document.addEventListener('mouseleave', hide);
+    window.addEventListener('scroll', hide, true);
 })();
 </script>
 

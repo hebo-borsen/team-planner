@@ -373,10 +373,13 @@ def calendar_view(dept_id):
         holiday_dict[hdate] = hname
 
     vacation_dict = {}
-    for uid, display, vdate, status in vacations_data:
+    for uid, display, vdate, status, created_at, created_by in vacations_data:
         if not vdate:
             continue
-        vacation_dict.setdefault(display, set()).add(vdate)
+        vacation_dict.setdefault(display, {})[vdate] = {
+            'created_at': created_at,
+            'created_by': created_by,
+        }
 
     weekend_days = set()
     for d in days:
