@@ -16,37 +16,37 @@
                             <input type="text" name="title" required
                                    class="px-2 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm font-semibold w-56"
                                    onkeydown="if(event.key==='Escape'){this.closest('form').classList.add('hidden');document.getElementById('rr-title-display-{{ rr_id }}').classList.remove('hidden')}">
-                            <button type="submit" class="text-green-600 dark:text-green-400 hover:text-green-800 text-sm font-medium">Save</button>
+                            <button type="submit" class="text-green-600 dark:text-green-400 hover:text-green-800 text-sm font-medium">{{ _('Save') }}</button>
                             <button type="button" class="text-gray-400 hover:text-gray-600 text-sm"
-                                    onclick="this.closest('form').classList.add('hidden');document.getElementById('rr-title-display-{{ rr_id }}').classList.remove('hidden')">Cancel</button>
+                                    onclick="this.closest('form').classList.add('hidden');document.getElementById('rr-title-display-{{ rr_id }}').classList.remove('hidden')">{{ _('Cancel') }}</button>
                         </form>
                         <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-borsen-red-light dark:bg-red-900/30 text-borsen-red dark:text-red-300">{{ rr_dept_name }}</span>
                         {% if not rr_active %}
-                        <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Upcoming</span>
+                        <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">{{ _('Upcoming') }}</span>
                         {% endif %}
                     </div>
                     <div class="text-sm text-gray-500 dark:text-gray-400">
                         {{ rr_start|fmtdate }} &ndash; {{ rr_end|fmtdate }}
                     </div>
                     <div class="flex items-center gap-4 text-xs">
-                        <span class="text-gray-400 dark:text-gray-500">Created {{ rr_created_at|fmtdatetime }}</span>
+                        <span class="text-gray-400 dark:text-gray-500">{{ _('Created') }} {{ rr_created_at|fmtdatetime }}</span>
                         {% if rr_review_activated %}
-                        <span class="text-green-600 dark:text-green-400 font-medium">Activated {{ rr_review_activated|fmtdatetime }}</span>
+                        <span class="text-green-600 dark:text-green-400 font-medium">{{ _('Activated') }} {{ rr_review_activated|fmtdatetime }}</span>
                         {% else %}
-                        <span class="text-gray-400 dark:text-gray-500 italic">Not yet activated</span>
+                        <span class="text-gray-400 dark:text-gray-500 italic">{{ _('Not yet activated') }}</span>
                         {% endif %}
                     </div>
                     <div class="flex items-center gap-3 pt-1">
                         <button onclick="var el=document.getElementById('review-status-{{ rr_id }}'); if(el.innerHTML.trim()){el.innerHTML=''}else{htmx.ajax('GET','/review-requests/{{ rr_id }}/status',{target:el,swap:'innerHTML'})}"
                                 class="text-sm text-borsen-red dark:text-red-400 hover:underline">
-                            Status
+                            {{ _('Status') }}
                         </button>
                         <button hx-delete="/review-requests/{{ rr_id }}"
                                 hx-target="#review-requests-list"
                                 hx-swap="innerHTML"
-                                hx-confirm="Delete this review request?"
+                                hx-confirm="{{ _('Delete this review request?') }}"
                                 class="text-sm text-red-600 dark:text-red-400 hover:underline">
-                            Delete
+                            {{ _('Delete') }}
                         </button>
                     </div>
                 </div>
@@ -56,16 +56,16 @@
                     hx-swap="innerHTML"
                     class="px-4 py-2 text-sm font-medium rounded-lg flex-shrink-0
                            {{ 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50' if rr_active else 'bg-green-600 hover:bg-green-700 text-white' }}">
-                {{ 'Pause review' if rr_active else 'Request review from users' }}
+                {{ _('Pause review') if rr_active else _('Request review from users') }}
             </button>
         </div>
         <div id="review-status-{{ rr_id }}" class="mt-3"></div>
     </div>
     <div class="px-5 py-2 bg-gray-100 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600 text-xs text-gray-400 dark:text-gray-500 text-right">
-        Created by {{ rr_creator }}
+        {{ _('Created by') }} {{ rr_creator }}
     </div>
 </div>
 {% endfor %}
 {% if not review_requests %}
-<p class="text-sm text-gray-500 dark:text-gray-400">No review requests yet.</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">{{ _('No review requests yet.') }}</p>
 {% endif %}

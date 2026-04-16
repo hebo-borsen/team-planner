@@ -3,9 +3,9 @@
 <table class="w-full text-sm">
     <thead>
         <tr class="border-b border-gray-200 dark:border-gray-700">
-            <th class="text-left py-2 font-medium">User</th>
-            <th class="text-left py-2 font-medium">Seen</th>
-            <th class="text-left py-2 font-medium">Signed Off</th>
+            <th class="text-left py-2 font-medium">{{ _('User') }}</th>
+            <th class="text-left py-2 font-medium">{{ _('Seen') }}</th>
+            <th class="text-left py-2 font-medium">{{ _('Signed Off') }}</th>
         </tr>
     </thead>
     <tbody>
@@ -16,14 +16,14 @@
                 {% if seen_at %}
                 <span class="text-green-600 dark:text-green-400">{{ seen_at|fmtdatetime }}</span>
                 {% else %}
-                <span class="text-gray-400">Not yet</span>
+                <span class="text-gray-400">{{ _('Not yet') }}</span>
                 {% endif %}
             </td>
             <td class="py-2">
                 {% if decided_at %}
                 <span class="text-green-600 dark:text-green-400">{{ decided_at|fmtdatetime }}</span>
                 {% else %}
-                <span class="text-gray-400">Pending</span>
+                <span class="text-gray-400">{{ _('Pending') }}</span>
                 {% endif %}
             </td>
         </tr>
@@ -31,5 +31,5 @@
     </tbody>
 </table>
 <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-    {{ ns.signed }} / {{ review_status|length }} signed off
+    {{ ns.signed }} / {{ review_status|length }} {{ _('signed off') }}
 </div>

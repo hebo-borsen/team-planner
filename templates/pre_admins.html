@@ -2,10 +2,9 @@
 
 {% block content %}
 <div class="max-w-lg mx-auto">
-    <h1 class="text-2xl font-bold mb-2">Pre-admins</h1>
+    <h1 class="text-2xl font-bold mb-2">{{ _('Pre-admins') }}</h1>
     <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
-        Users who register with one of these emails will automatically become admins.
-        One email per line.
+        {{ _('Users who register with one of these emails will automatically become admins. One email per line.') }}
     </p>
 
     <form method="post" class="space-y-4">
@@ -14,7 +13,7 @@
                   placeholder="boss@borsen.dk&#10;another@borsen.dk">{{ emails|join('\n') }}</textarea>
         <button type="submit"
                 class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white font-medium rounded-lg text-sm">
-            Save
+            {{ _('Save') }}
         </button>
     </form>
 </div>

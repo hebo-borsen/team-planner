@@ -38,6 +38,8 @@ services:
     volumes:
       - ./app.py:/app/app.py
       - ./db.py:/app/db.py
+      - ./i18n.py:/app/i18n.py
+      - ./translations:/app/translations
       - ./danish_holidays.py:/app/danish_holidays.py
       - ./migrate.py:/app/migrate.py
       - ./migrations:/app/migrations

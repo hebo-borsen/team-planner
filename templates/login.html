@@ -10,7 +10,7 @@
     </button>
 </div>
 
-<h1 class="text-2xl font-bold text-center mb-6">Team Planner</h1>
+<h1 class="text-2xl font-bold text-center mb-6">{{ _('Team Planner') }}</h1>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
@@ -29,23 +29,23 @@
 <div class="max-w-sm mx-auto bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <form method="post" class="space-y-4">
         <div>
-            <label class="block text-sm font-medium mb-1">Shortname</label>
+            <label class="block text-sm font-medium mb-1">{{ _('Shortname') }}</label>
             <input type="text" name="username" required autofocus placeholder="bcda"
                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-borsen-red focus:border-transparent">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">Password</label>
+            <label class="block text-sm font-medium mb-1">{{ _('Password') }}</label>
             <input type="password" name="password" required
                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-borsen-red focus:border-transparent">
         </div>
         <button type="submit"
                 class="w-full py-2 px-4 bg-borsen-red hover:bg-borsen-red-dark text-white font-medium rounded-lg">
-            Log in
+            {{ _('Log in') }}
         </button>
     </form>
 </div>
 
 <p class="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
-    Don't have an account? <a href="/register" class="text-borsen-red dark:text-red-400 hover:underline">Register</a>
+    {{ _("Don't have an account?") }} <a href="/register" class="text-borsen-red dark:text-red-400 hover:underline">{{ _('Register') }}</a>
 </p>
 {% endblock %}

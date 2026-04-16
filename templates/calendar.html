@@ -26,7 +26,7 @@ function saveCalRange(from, to) {
 }
 </script>
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">Vacation Calendar</h1>
+    <h1 class="text-2xl font-bold">{{ _('Vacation Calendar') }}</h1>
     <div class="flex items-center space-x-3">
         <div class="flex items-center space-x-1">
             {% for p in presets %}
@@ -39,20 +39,20 @@ function saveCalRange(from, to) {
             {% endfor %}
         </div>
         <div class="flex items-center space-x-1">
-            <label for="cal-from" class="text-sm font-medium">From</label>
+            <label for="cal-from" class="text-sm font-medium">{{ _('From') }}</label>
             <input type="date" name="from" id="cal-from" value="{{ start_date.isoformat() }}"
                    hx-get="{{ cal_base }}" hx-target="#calendar-grid" hx-include="#cal-to" hx-push-url="true"
                    onchange="saveCalRange(this.value, document.getElementById('cal-to').value)"
                    class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
         </div>
         <div class="flex items-center space-x-1">
-            <label for="cal-to" class="text-sm font-medium">To</label>
+            <label for="cal-to" class="text-sm font-medium">{{ _('To') }}</label>
             <input type="date" name="to" id="cal-to" value="{{ end_date.isoformat() }}"
                    hx-get="{{ cal_base }}" hx-target="#calendar-grid" hx-include="#cal-from" hx-push-url="true"
                    onchange="saveCalRange(document.getElementById('cal-from').value, this.value)"
                    class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
         </div>
-        <button id="fullwidth-toggle" onclick="toggleFullWidth()" title="Toggle full width"
+        <button id="fullwidth-toggle" onclick="toggleFullWidth()" title="{{ _('Toggle full width') }}"
                 class="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path id="fw-expand" stroke-linecap="round" stroke-linejoin="round"
@@ -97,62 +97,62 @@ function toggleFullWidth() {
 </div>
 
 <div class="flex items-center gap-3 mt-3 text-xs text-gray-500 dark:text-gray-400">
-    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-borsen-pink"></span> Vacation</span>
+    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-borsen-pink"></span> {{ _('Vacation') }}</span>
     {% if review_dates %}
-    <span class="inline-flex items-center gap-1"><span class="relative inline-block w-4 h-4 rounded bg-gray-100 dark:bg-gray-700"><span class="review-tri" style="background:#f59e0b"></span></span> Review period</span>
+    <span class="inline-flex items-center gap-1"><span class="relative inline-block w-4 h-4 rounded bg-gray-100 dark:bg-gray-700"><span class="review-tri" style="background:#f59e0b"></span></span> {{ _('Review period') }}</span>
     {% endif %}
 </div>
 
 <div class="flex items-center justify-end mt-4">
     <button onclick="document.getElementById('vacation-modal').classList.remove('hidden')"
             class="px-6 py-3 bg-borsen-red hover:bg-borsen-red-dark text-white font-medium rounded-lg shadow-lg text-sm">
-        + Add Vacation
+        + {{ _('Add Vacation') }}
     </button>
 </div>
 
 <!-- Holiday Period Summary (all users) -->
 {% if period_summary %}
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
-    <h2 class="text-lg font-semibold mb-4">Holiday Period {{ period_label }}</h2>
+    <h2 class="text-lg font-semibold mb-4">{{ _('Holiday Period') }} {{ period_label }}</h2>
     <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">
-        Ends {{ period_end_date|fmtdate }} &middot; <strong>{{ period_summary.months_left }} month{{ 's' if period_summary.months_left != 1 else '' }} remaining</strong>
+        {{ _('Ends') }} {{ period_end_date|fmtdate }} &middot; <strong>{{ period_summary.months_left }} {{ _('months remaining') if period_summary.months_left != 1 else _('month remaining') }}</strong>
     </p>
     {% if earning_start and earning_end %}
     <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">
-        Earning period: {{ earning_start|fmtdate }} – {{ earning_end|fmtdate }}
+        {{ _('Earning period:') }} {{ earning_start|fmtdate }} – {{ earning_end|fmtdate }}
     </p>
     {% endif %}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div class="bg-borsen-cream dark:bg-gray-700/50 rounded-lg p-4">
             <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ period_summary.remaining|round|int }}{% if period_summary.remaining != period_summary.remaining|round|int %} <span class="text-xs font-normal text-gray-400 dark:text-gray-500">(rounded from {{ period_summary.remaining }})</span>{% endif %}</div>
-            <div class="text-sm text-gray-500 dark:text-gray-400">Projected remaining holiday days in period</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">{{ _('Projected remaining holiday days in period') }}</div>
         </div>
         <div class="bg-borsen-cream dark:bg-gray-700/50 rounded-lg p-4">
             {% set available_exact = (vacation_summary.accrued - vacation_summary.used)|round(1) %}
             <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ available_exact|round|int }}{% if available_exact != available_exact|round|int %} <span class="text-xs font-normal text-gray-400 dark:text-gray-500">(rounded from {{ available_exact }})</span>{% endif %}</div>
-            <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">Holiday days available as of <strong>{{ today|fmtdate }}</strong></div>
+            <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">{{ _('Holiday days available as of') }} <strong>{{ today|fmtdate }}</strong></div>
             <div class="text-xs text-gray-400 dark:text-gray-500 space-y-0.5 border-t border-gray-200 dark:border-gray-600 pt-2">
-                <div class="flex justify-between"><span>Earned:</span> <span>{{ vacation_summary.accrued }}</span></div>
-                <div class="flex justify-between"><span>Used:</span> <span>{{ vacation_summary.used }}</span></div>
+                <div class="flex justify-between"><span>{{ _('Earned:') }}</span> <span>{{ vacation_summary.accrued }}</span></div>
+                <div class="flex justify-between"><span>{{ _('Used:') }}</span> <span>{{ vacation_summary.used }}</span></div>
                 <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
-                    <span>Available:</span>
+                    <span>{{ _('Available:') }}</span>
                     <span>{{ vacation_summary.accrued }} &minus; {{ vacation_summary.used }} = <strong>{{ (vacation_summary.accrued - vacation_summary.used)|round(1) }}</strong></span>
                 </div>
                 <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
-                    <span>Earned calculation:</span>
+                    <span>{{ _('Earned calculation:') }}</span>
                     <span>{{ vacation_summary.base_days }} / 12 &times; {{ vacation_summary.months_elapsed }} = {{ vacation_summary.accrued }}</span>
                 </div>
-                <div class="flex justify-between"><span>Accrual start:</span> <span>{{ vacation_summary.accrual_start|fmtdate }}</span></div>
+                <div class="flex justify-between"><span>{{ _('Accrual start:') }}</span> <span>{{ vacation_summary.accrual_start|fmtdate }}</span></div>
                 {% if vacation_summary.base_days != vacation_summary.days_off_per_year %}
-                <div class="flex justify-between"><span>Base days (before proration):</span> <span>{{ vacation_summary.base_days }}</span></div>
+                <div class="flex justify-between"><span>{{ _('Base days (before proration):') }}</span> <span>{{ vacation_summary.base_days }}</span></div>
                 {% endif %}
             </div>
         </div>
 
         {% if monthly_chart %}
         <div class="bg-borsen-cream dark:bg-gray-700/50 rounded-lg p-4">
-            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400">Days off per month</h3>
-            <p class="text-xs text-gray-400 dark:text-gray-500 mb-3">Historical and projected</p>
+            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400">{{ _('Days off per month') }}</h3>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mb-3">{{ _('Historical and projected') }}</p>
             {% set bar_max = [suggested_per_month] %}
             {% for m in monthly_chart %}
                 {% if m.is_past or m.is_current %}
@@ -160,7 +160,7 @@ function toggleFullWidth() {
                 {% else %}
                     {% set bar_val = m.used + (suggested_per_month if suggested_per_month > 0 else 0) %}
                 {% endif %}
-                {% if bar_val > bar_max[0] %}{% set _ = bar_max.pop() %}{% set _ = bar_max.append(bar_val) %}{% endif %}
+                {% if bar_val > bar_max[0] %}{% set _x = bar_max.pop() %}{% set _x = bar_max.append(bar_val) %}{% endif %}
             {% endfor %}
             {% set bmax = bar_max[0] if bar_max[0] > 0 else 1 %}
             <div class="relative">
@@ -216,9 +216,9 @@ function toggleFullWidth() {
             </div>
             {% set has_future_planned = monthly_chart|selectattr('is_future')|selectattr('used', 'gt', 0)|list|length > 0 %}
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] text-gray-400 dark:text-gray-500">
-                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-borsen-pink dark:bg-borsen-pink"></span> Used{% if has_future_planned %} / Planned{% endif %}</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-borsen-pink dark:bg-borsen-pink"></span> {{ _('Used') }}{% if has_future_planned %} / {{ _('Planned') }}{% endif %}</span>
                 {% if suggested_per_month > 0 %}
-                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-amber-300 dark:bg-amber-600"></span> Required burn rate ({{ suggested_per_month }}/mo)</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-amber-300 dark:bg-amber-600"></span> {{ _('Required burn rate') }} ({{ suggested_per_month }}/mo)</span>
                 {% endif %}
             </div>
         </div>
@@ -230,18 +230,18 @@ function toggleFullWidth() {
 <!-- Admin: All Users Overview -->
 {% if is_admin and admin_summaries %}
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
-    <h2 class="text-lg font-semibold mb-4">Team Overview &mdash; {{ period_label }}</h2>
+    <h2 class="text-lg font-semibold mb-4">{{ _('Team Overview') }} &mdash; {{ period_label }}</h2>
     <div class="overflow-x-auto">
         <table class="w-full text-sm" id="admin-holiday-table">
             <thead>
                 <tr class="border-b border-gray-200 dark:border-gray-700 cursor-pointer select-none">
-                    <th class="text-left py-2 font-medium" onclick="sortTable(0)">Name <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium" onclick="sortTable(1)">Entitlement <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium" onclick="sortTable(2)">Used <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium" onclick="sortTable(3)">Remaining <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium" onclick="sortTable(4)">Available <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-left py-2 font-medium pl-4" onclick="sortTable(5)">Days/month <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-right py-2 font-medium whitespace-nowrap" style="width: 1%;" onclick="sortTable(6)">Last login <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-left py-2 font-medium" onclick="sortTable(0)">{{ _('Name') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(1)">{{ _('Entitlement') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(2)">{{ _('Used') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(3)">{{ _('Remaining') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium" onclick="sortTable(4)">{{ _('Available') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-left py-2 font-medium pl-4" onclick="sortTable(5)">{{ _('Days/month') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-right py-2 font-medium whitespace-nowrap" style="width: 1%;" onclick="sortTable(6)">{{ _('Last login') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -300,7 +300,7 @@ function toggleFullWidth() {
                         {% endif %}
                     </td>
                     <td class="py-2.5 text-right text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" style="width: 1%;" {% if last_login %}data-sort-value="{{ last_login.strftime('%Y%m%d%H%M') }}"{% else %}data-sort-value="0"{% endif %}>
-                        {% if last_login %}{{ last_login|fmtdatetime }}{% else %}<span class="text-gray-400 dark:text-gray-600">Never</span>{% endif %}
+                        {% if last_login %}{{ last_login|fmtdatetime }}{% else %}<span class="text-gray-400 dark:text-gray-600">{{ _('Never') }}</span>{% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -544,19 +544,19 @@ function toggleFullWidth() {
      onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">Add Vacation</h2>
+            <h2 class="text-lg font-semibold">{{ _('Add Vacation') }}</h2>
             <button onclick="document.getElementById('vacation-modal').classList.add('hidden')"
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
         </div>
         <form method="post" action="/vacations" class="space-y-4">
             {% if is_admin %}
             <div>
-                <label class="block text-sm font-medium mb-1">User</label>
+                <label class="block text-sm font-medium mb-1">{{ _('User') }}</label>
                 <select name="user_id" required
                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
-                    <option value="">Select user...</option>
+                    <option value="">{{ _('Select user...') }}</option>
                     {% for uid, uname, udisplay_name, uinitials, ufont, udept_id, udept_name, is_secondary in users %}
-                    <option value="{{ uid }}">{{ udisplay_name or uname }}{{ ' (guest)' if is_secondary else '' }}</option>
+                    <option value="{{ uid }}">{{ udisplay_name or uname }}{{ ' (' + _('guest') + ')' if is_secondary else '' }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -564,23 +564,23 @@ function toggleFullWidth() {
             <input type="hidden" name="user_id" value="{{ user_id }}">
             {% endif %}
             <div>
-                <label class="block text-sm font-medium mb-1">Start Date</label>
+                <label class="block text-sm font-medium mb-1">{{ _('Start Date') }}</label>
                 <input type="date" name="vacation_date" required
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">End Date</label>
+                <label class="block text-sm font-medium mb-1">{{ _('End Date') }}</label>
                 <input type="date" name="end_date"
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <div class="flex justify-end space-x-2 pt-2">
                 <button type="button" onclick="document.getElementById('vacation-modal').classList.add('hidden')"
                         class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
-                    Cancel
+                    {{ _('Cancel') }}
                 </button>
                 <button type="submit"
                         class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
-                    Add Vacation
+                    {{ _('Add Vacation') }}
                 </button>
             </div>
         </form>
@@ -592,16 +592,16 @@ function toggleFullWidth() {
      onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">Delete Vacation</h2>
+            <h2 class="text-lg font-semibold">{{ _('Delete Vacation') }}</h2>
             <button onclick="document.getElementById('remove-modal').classList.add('hidden')"
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
         </div>
         <div class="mb-4 space-y-2 text-sm">
-            <p><span class="text-gray-500 dark:text-gray-400">User:</span> <strong id="rm-user-name"></strong></p>
-            <p><span class="text-gray-500 dark:text-gray-400">Period:</span> <span id="rm-date-range"></span></p>
-            <p><span class="text-gray-500 dark:text-gray-400">Vacation days:</span> <span id="rm-day-count"></span></p>
+            <p><span class="text-gray-500 dark:text-gray-400">{{ _('User:') }}</span> <strong id="rm-user-name"></strong></p>
+            <p><span class="text-gray-500 dark:text-gray-400">{{ _('Period:') }}</span> <span id="rm-date-range"></span></p>
+            <p><span class="text-gray-500 dark:text-gray-400">{{ _('Vacation days:') }}</span> <span id="rm-day-count"></span></p>
         </div>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">This will permanently delete the selected vacation days.</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{ _('This will permanently delete the selected vacation days.') }}</p>
         <form method="post" action="/vacations/remove-by-dates">
             <input type="hidden" name="user_id" value="">
             <input type="hidden" name="start_date" value="">
@@ -609,11 +609,11 @@ function toggleFullWidth() {
             <div class="flex justify-end space-x-2">
                 <button type="button" onclick="document.getElementById('remove-modal').classList.add('hidden')"
                         class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
-                    Cancel
+                    {{ _('Cancel') }}
                 </button>
                 <button type="submit"
                         class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg">
-                    Delete Vacation
+                    {{ _('Delete Vacation') }}
                 </button>
             </div>
         </form>

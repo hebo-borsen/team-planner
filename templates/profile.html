@@ -1,40 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Profile</h1>
+<h1 class="text-2xl font-bold mb-6">{{ _('Profile') }}</h1>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-        <h2 class="text-lg font-semibold mb-3">Details</h2>
+        <h2 class="text-lg font-semibold mb-3">{{ _('Details') }}</h2>
         <form method="post" action="/profile/update" class="space-y-3">
             <div>
-                <label class="block text-sm font-medium mb-1">Shortname</label>
+                <label class="block text-sm font-medium mb-1">{{ _('Shortname') }}</label>
                 <input type="text" value="{{ profile[0] if profile else username }}" disabled
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-sm text-gray-500">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">Full name</label>
+                <label class="block text-sm font-medium mb-1">{{ _('Full name') }}</label>
                 <input type="text" name="display_name" value="{{ profile[2] or '' if profile else '' }}"
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">Email</label>
+                <label class="block text-sm font-medium mb-1">{{ _('Email') }}</label>
                 <input type="email" name="email" value="{{ profile[1] or '' if profile else '' }}"
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">Initials</label>
+                <label class="block text-sm font-medium mb-1">{{ _('Initials') }}</label>
                 <input type="text" name="initials" value="{{ profile[4] or '' if profile else '' }}"
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             {% if is_fun_dept %}
             <div>
-                <label class="block text-sm font-medium mb-1">Font</label>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">The font your name should be written in</p>
+                <label class="block text-sm font-medium mb-1">{{ _('Font') }}</label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">{{ _('The font your name should be written in') }}</p>
                 {% set current_font = profile[5] or '' if profile else '' %}
                 <select name="font" id="font-select"
                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
-                    <option value="">-- Default font --</option>
+                    <option value="">-- {{ _('Default font') }} --</option>
                     {% for f in [
                         'Abril Fatface', 'Amatic SC', 'Audiowide', 'Bangers', 'Baumans',
                         'Black Ops One', 'Bowlby One SC', 'Bungee', 'Bungee Inline', 'Bungee Shade',
@@ -62,13 +62,13 @@
                 </select>
                 <div id="font-preview" class="mt-2 px-3 py-2 text-lg text-center rounded border border-dashed border-gray-300 dark:border-gray-600 {{ 'hidden' if not current_font else 'text-gray-900 dark:text-gray-100' }}"
                      {% if current_font %}style="font-family: '{{ current_font }}', cursive;"{% endif %}>
-                    {{ profile[2] or profile[0] or 'Your Name Here' if profile else 'Your Name Here' }}
+                    {{ profile[2] or profile[0] or _('Your Name Here') if profile else _('Your Name Here') }}
                 </div>
             </div>
             {% endif %}
             <button type="submit"
                     class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
-                Save Profile
+                {{ _('Save Profile') }}
             </button>
         </form>
         {% if is_fun_dept %}
@@ -78,7 +78,7 @@
                 var nameInput = document.querySelector('input[name="display_name"]');
                 if (this.value) {
                     preview.style.fontFamily = "'" + this.value + "', cursive";
-                    preview.textContent = nameInput.value || 'Your Name Here';
+                    preview.textContent = nameInput.value || '{{ _('Your Name Here') }}';
                     preview.classList.remove('hidden');
                 } else {
                     preview.classList.add('hidden');
@@ -96,26 +96,26 @@
     </div>
 
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-        <h2 class="text-lg font-semibold mb-3">Change Password</h2>
+        <h2 class="text-lg font-semibold mb-3">{{ _('Change Password') }}</h2>
         <form method="post" action="/profile/password" class="space-y-3">
             <div>
-                <label class="block text-sm font-medium mb-1">Current Password</label>
+                <label class="block text-sm font-medium mb-1">{{ _('Current Password') }}</label>
                 <input type="password" name="current_password" required
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">New Password</label>
+                <label class="block text-sm font-medium mb-1">{{ _('New Password') }}</label>
                 <input type="password" name="new_password" required
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">Confirm New Password</label>
+                <label class="block text-sm font-medium mb-1">{{ _('Confirm New Password') }}</label>
                 <input type="password" name="confirm_password" required
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <button type="submit"
                     class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
-                Update Password
+                {{ _('Update Password') }}
             </button>
         </form>
     </div>

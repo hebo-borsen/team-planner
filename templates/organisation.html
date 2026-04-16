@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Organisation</h1>
+<h1 class="text-2xl font-bold mb-6">{{ _('Organisation') }}</h1>
 
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-    <h2 class="text-lg font-semibold mb-4">Departments</h2>
+    <h2 class="text-lg font-semibold mb-4">{{ _('Departments') }}</h2>
 
     <form method="post" action="/departments" class="flex items-end gap-3 mb-4">
         <div>
-            <label class="block text-xs font-medium mb-1">Department Name</label>
-            <input type="text" name="name" required placeholder="e.g. Development"
+            <label class="block text-xs font-medium mb-1">{{ _('Department Name') }}</label>
+            <input type="text" name="name" required placeholder="{{ _('e.g. Development') }}"
                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-64">
         </div>
         <button type="submit"
                 class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
-            Add Department
+            {{ _('Add Department') }}
         </button>
     </form>
 
@@ -24,13 +24,13 @@
 </div>
 
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
-    <h2 class="text-lg font-semibold mb-4">Public Holidays (S&oslash;gnehelligdage)</h2>
+    <h2 class="text-lg font-semibold mb-4">{{ _('Public Holidays') }} (S&oslash;gnehelligdage)</h2>
     <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        These holidays apply to all departments.
+        {{ _('These holidays apply to all departments.') }}
     </p>
 
     <div class="mb-4">
-        <label for="org-period-select" class="block text-sm font-medium mb-1">Holiday Period</label>
+        <label for="org-period-select" class="block text-sm font-medium mb-1">{{ _('Holiday Period') }}</label>
         <select id="org-period-select" name="period_id"
                 hx-get="/organisation/holidays" hx-target="#holiday-list" hx-swap="innerHTML"
                 class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-full max-w-xs">
@@ -48,16 +48,16 @@
 </div>
 
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
-    <h2 class="text-lg font-semibold mb-4">Holiday Periods</h2>
+    <h2 class="text-lg font-semibold mb-4">{{ _('Holiday Periods') }}</h2>
     <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        Each holiday period has an <strong>earning period</strong> (Sep 1 – Aug 31, when days accrue) and a <strong>holiday period</strong> (Jan 1 – Dec 31, when days can be spent).
+        {{ _('Each holiday period has an') }} <strong>{{ _('earning period') }}</strong> {{ _('(Sep 1 – Aug 31, when days accrue) and a') }} <strong>{{ _('holiday period') }}</strong> {{ _('(Jan 1 – Dec 31, when days can be spent).') }}
     </p>
     <div class="space-y-2">
         {% for pid, plabel, pstart, pend, estart, eend in periods %}
         <div class="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2.5 bg-borsen-cream dark:bg-gray-700/30 rounded-lg text-sm">
             <span class="font-medium w-24">{{ plabel }}</span>
-            <span class="text-gray-500 dark:text-gray-400">Earning period: <span class="text-gray-700 dark:text-gray-300">{{ estart|fmtdate }} – {{ eend|fmtdate }}</span></span>
-            <span class="text-gray-500 dark:text-gray-400">Holiday period: <span class="text-gray-700 dark:text-gray-300">{{ pstart|fmtdate }} – {{ pend|fmtdate }}</span></span>
+            <span class="text-gray-500 dark:text-gray-400">{{ _('Earning period:') }} <span class="text-gray-700 dark:text-gray-300">{{ estart|fmtdate }} – {{ eend|fmtdate }}</span></span>
+            <span class="text-gray-500 dark:text-gray-400">{{ _('Holiday period:') }} <span class="text-gray-700 dark:text-gray-300">{{ pstart|fmtdate }} – {{ pend|fmtdate }}</span></span>
         </div>
         {% endfor %}
     </div>
