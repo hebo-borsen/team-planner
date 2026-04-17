@@ -8,7 +8,7 @@
     {% set udays = udays_off if udays_off is not none else 34 %}
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden {{ 'opacity-50' if not uactive }}">
         <!-- Row 1: Identity & Role -->
-        <div class="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+        <div class="px-5 py-4 flex items-start justify-between gap-4 flex-wrap">
             <div class="flex items-center gap-4">
                 <div>
                     <form method="post" action="/users/{{ uid }}/display-name" class="inline-flex items-center gap-1">
@@ -38,30 +38,40 @@
                 </span>
                 {% endif %}
             </div>
-            <div class="flex items-start gap-2 flex-wrap justify-end">
-                {% if urole == 'admin' and uid != user_id %}
-                <form method="post" action="/users/{{ uid }}/role" class="inline">
-                    <input type="hidden" name="role" value="user">
-                    <button type="submit"
-                            class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded">
-                        {{ _('Remove Admin') }}
-                    </button>
-                </form>
-                {% elif urole != 'admin' %}
-                <form method="post" action="/users/{{ uid }}/role" class="inline">
-                    <input type="hidden" name="role" value="admin">
-                    <button type="submit"
-                            class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded">
-                        {{ _('Make Admin') }}
-                    </button>
-                </form>
-                {% endif %}
-                <details class="group">
-                    <summary class="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-xs font-medium rounded cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
-                        {{ _('Danger zone') }}
+            <div class="flex flex-col gap-2 items-end">
+                <details class="group self-stretch flex flex-col items-end">
+                    <summary class="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-xs font-medium rounded cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden ml-auto">
+                        {{ _('Actions') }}
                         <span class="transition-transform group-open:rotate-180">▾</span>
                     </summary>
-                    <div class="mt-2 flex gap-2 flex-wrap justify-end">
+                    <div class="mt-2 flex flex-col gap-2 items-end">
+                        {% if urole == 'admin' and uid != user_id %}
+                        <form method="post" action="/users/{{ uid }}/role" class="inline">
+                            <input type="hidden" name="role" value="user">
+                            <button type="submit"
+                                    class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded">
+                                {{ _('Remove Admin') }}
+                            </button>
+                        </form>
+                        {% elif urole != 'admin' %}
+                        <form method="post" action="/users/{{ uid }}/role" class="inline">
+                            <input type="hidden" name="role" value="admin">
+                            <button type="submit"
+                                    class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded">
+                                {{ _('Make Admin') }}
+                            </button>
+                        </form>
+                        {% endif %}
+                        <div class="flex flex-col items-end">
+                            <form method="post" action="/users/{{ uid }}/reset-holidays" class="inline"
+                                  onsubmit="return confirm('{{ _('This will delete all vacation days, withdraw all review sign-offs, and ask the user to re-enter their holiday balance on next login. Continue?') }}')">
+                                <button type="submit"
+                                        class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded">
+                                    {{ _('Reset Holidays') }}
+                                </button>
+                            </form>
+                            <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 text-right">{{ _('Deletes all vacation days, withdraws review sign-offs, and asks the user to re-enter their balance on next login.') }}</p>
+                        </div>
                         <button onclick="document.getElementById('pw-modal-{{ uid }}').classList.remove('hidden')"
                                 class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded">
                             {{ _('Change Password') }}

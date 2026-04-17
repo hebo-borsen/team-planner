@@ -55,7 +55,7 @@
             <td class="py-2.5 text-center">
                 <button hx-delete="/settings/holidays/{{ hid }}/delete"
                         hx-target="#holiday-list" hx-swap="innerHTML"
-                        hx-confirm="{{ _('Delete %(name)s?', name=hname) }}"
+                        hx-confirm="{{ _('Delete {}?').format(hname) }}"
                         class="text-gray-400 hover:text-red-600 dark:hover:text-red-400"
                         title="Delete holiday">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

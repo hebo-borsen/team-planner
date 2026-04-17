@@ -14,7 +14,7 @@
                 <button hx-delete="/admin/team/{{ mid }}"
                         hx-target="#team-list"
                         hx-swap="innerHTML"
-                        hx-confirm="{{ _('Delete %(name)s? This will also remove their vacations and event responses.', name=mname) }}"
+                        hx-confirm="{{ _('Delete {}? This will also remove their vacations and event responses.').format(mname) }}"
                         class="text-red-600 dark:text-red-400 hover:underline text-xs">
                     {{ _('Delete') }}
                 </button>

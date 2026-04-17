@@ -54,6 +54,11 @@ def format_datetime(value):
 # Error handlers
 # ---------------------------------------------------------------------------
 
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('404.html'), 404
+
+
 @app.errorhandler(500)
 def internal_error(e):
     import traceback
@@ -264,8 +269,7 @@ def initial_accrued():
     period_end = None
     earning_start = None
     earning_end = None
-    period_label = None
-    days_off = 34
+    base_days = 34
     if period_id:
         for pid, plabel, pstart, pend, estart, eend in db.get_holiday_periods():
             if pid == period_id:
@@ -273,34 +277,59 @@ def initial_accrued():
                 period_end = pend
                 earning_start = estart or pstart
                 earning_end = eend or pend
-                period_label = plabel
-                days_off = db.get_vacation_summary(
-                    session['user_id'], pstart, pend,
-                    earning_start=earning_start, earning_end=earning_end)['days_off_per_year']
                 break
+        conn = db.get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT days_off_per_year FROM users WHERE id = %s", (session['user_id'],))
+        row = cur.fetchone()
+        if row and row[0] is not None:
+            base_days = float(row[0])
+        cur.close()
+        conn.close()
 
     if request.method == 'POST':
-        raw_used = request.form.get('days_used', '').strip()
-        started_this_period = request.form.get('started_this_period') == 'yes'
-        start_date_str = request.form.get('start_date', '').strip()
+        raw = request.form.get('days_available', '').strip()
         try:
-            days_used = int(raw_used) if raw_used else 0
-            if days_used < 0:
+            days_available = float(raw) if raw else 0
+            if days_available < 0:
                 raise ValueError
         except (ValueError, TypeError):
             flash(_('Please enter a valid number (0 or more).'), 'error')
             return redirect(url_for('initial_accrued'))
-        user_start = None
-        if started_this_period and start_date_str:
-            user_start = date.fromisoformat(start_date_str)
-        db.set_initial_accrued(session['user_id'], days_used, period_start,
-                               start_date=user_start)
+
+        # Parse start status. "after" means user joined within the current
+        # earning period and an exact date is required.
+        started_status = request.form.get('started_status', 'before')
+        effective_start = None
+        if started_status == 'after':
+            raw_date = request.form.get('start_date', '').strip()
+            try:
+                parsed = datetime.strptime(raw_date, '%Y-%m-%d').date()
+            except ValueError:
+                flash(_('Please enter a valid start date.'), 'error')
+                return redirect(url_for('initial_accrued'))
+            if earning_start and earning_end and not (earning_start <= parsed <= earning_end):
+                flash(_('Start date must be within the current earning period.'), 'error')
+                return redirect(url_for('initial_accrued'))
+            effective_start = parsed
+
+        # Recompute accrued using the chosen start date so days_used is correct.
+        today = date.today()
+        if earning_start:
+            accrual_start = effective_start if effective_start and effective_start > earning_start else earning_start
+            months_elapsed = max(0, (today.year - accrual_start.year) * 12 + today.month - accrual_start.month)
+            accrued = round(base_days / 12 * months_elapsed, 1)
+        else:
+            accrued = 0
+
+        days_used = max(0, round(accrued - days_available))
+        db.set_initial_accrued(session['user_id'], days_used, period_start, start_date=effective_start)
         session['needs_initial_accrued'] = False
         flash(_('Holiday balance saved!'), 'success')
         return redirect(url_for('calendar_redirect'))
     return render_template('initial_accrued.html',
-                           period_label=period_label, days_off=days_off,
-                           period_start=period_start, period_end=period_end)
+                           earning_start=earning_start,
+                           earning_end=earning_end)
 
 
 # ---------------------------------------------------------------------------
@@ -377,12 +406,14 @@ def calendar_view(dept_id):
         holiday_dict[hdate] = hname
 
     vacation_dict = {}
-    for uid, display, vdate, status, created_at, created_by in vacations_data:
+    for uid, display, vdate, status, created_at, created_by, self_paid in vacations_data:
         if not vdate:
             continue
         vacation_dict.setdefault(display, {})[vdate] = {
             'created_at': created_at,
             'created_by': created_by,
+            'self_paid': bool(self_paid),
+            'uid': uid,
         }
 
     weekend_days = set()
@@ -433,15 +464,22 @@ def calendar_view(dept_id):
                         user_suggested = round(remaining / months_left, 1)
                         user_usage = all_usage.get(uid, {})
                         chart = []
-                        d_m = date(pstart.year, pstart.month, 1)
+                        cum_used = 0
+                        d_m = date(earning_start.year, earning_start.month, 1)
                         end_m = date(pend.year, pend.month, 1)
                         while d_m <= end_m:
                             used_m = user_usage.get((d_m.year, d_m.month), 0)
                             is_past = (d_m.year < today.year) or (d_m.year == today.year and d_m.month < today.month)
                             is_current = (d_m.year == today.year and d_m.month == today.month)
+                            cum_used += used_m
+                            e_months = (d_m.year - earning_start.year) * 12 + d_m.month - earning_start.month
+                            accrued = min(entitlement, round(entitlement / 12 * max(0, e_months), 1))
                             chart.append({
                                 'label': month_names[d_m.month - 1],
+                                'year': d_m.year,
                                 'used': used_m,
+                                'accrued': accrued,
+                                'balance': round(accrued - cum_used, 1),
                                 'is_past': is_past,
                                 'is_current': is_current,
                                 'is_future': not is_past and not is_current,
@@ -462,24 +500,35 @@ def calendar_view(dept_id):
         vacation_summary = {'days_off_per_year': 34, 'used': 0,
                             'remaining': 34, 'accrued': 0}
 
-    # Build monthly bar chart data for the period
+    # Build monthly balance chart data for the period
     monthly_chart = []
+    user_entitlement = period_summary.get('days_off_per_year', 0) if period_summary else 0
     if period_start and period_end_date and period_summary:
         usage_by_month = db.get_vacation_days_per_month(
             session['user_id'], period_start, period_end_date)
         suggested = round(period_summary['remaining'] / period_summary['months_left'], 1)
         month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        d = date(period_start.year, period_start.month, 1)
+        # If the user joined after the earning period began, start the chart
+        # at their join date and accrue from there. Cap at prorated entitlement.
+        chart_start = vacation_summary.get('accrual_start') or earning_start
+        base_days = vacation_summary.get('base_days') or user_entitlement
+        cum_used = 0
+        d = date(chart_start.year, chart_start.month, 1)
         end_m = date(period_end_date.year, period_end_date.month, 1)
         while d <= end_m:
             used_m = usage_by_month.get((d.year, d.month), 0)
             is_past = (d.year < today.year) or (d.year == today.year and d.month < today.month)
             is_current = (d.year == today.year and d.month == today.month)
+            cum_used += used_m
+            e_months = (d.year - chart_start.year) * 12 + d.month - chart_start.month
+            accrued = min(user_entitlement, round(base_days / 12 * max(0, e_months), 1))
             monthly_chart.append({
                 'label': month_names[d.month - 1],
                 'year': d.year,
                 'used': used_m,
+                'accrued': accrued,
+                'balance': round(accrued - cum_used, 1),
                 'is_past': is_past,
                 'is_current': is_current,
                 'is_future': not is_past and not is_current,
@@ -507,8 +556,8 @@ def calendar_view(dept_id):
     review_dates = set()
 
     for rr in all_grid_reviews:
-        # (id, title, start_date, end_date, department_id, color, active)
-        req_id, _title, rr_start, rr_end, rr_dept_id, rr_color, rr_active = rr
+        # (id, title, start_date, end_date, department_id, color, active, review_activated, creator_name)
+        req_id, rr_title, rr_start, rr_end, rr_dept_id, rr_color, rr_active, rr_activated, rr_creator = rr
         signed_users = signoff_map.get(req_id, set())
         d = rr_start
         while d <= rr_end:
@@ -522,13 +571,13 @@ def calendar_view(dept_id):
                 if rr_active:
                     if uid in signed_users:
                         prio = PRIORITY_ACTIVE_SIGNED
-                        cell = (rr_color, 0.45, True)
+                        cell = (rr_color, 0.45, True, rr_title, True, rr_activated, rr_creator)
                     else:
                         prio = PRIORITY_ACTIVE_PENDING
-                        cell = (rr_color, 1.0, False)
+                        cell = (rr_color, 1.0, False, rr_title, True, rr_activated, rr_creator)
                 else:
                     prio = PRIORITY_INACTIVE
-                    cell = (rr_color, 0.15, False)
+                    cell = (rr_color, 0.15, False, rr_title, False, rr_activated, rr_creator)
                 cur_prio = user_review_priority.get(uid, {}).get(d, 0)
                 if prio > cur_prio:
                     user_review_cells.setdefault(uid, {})[d] = cell
@@ -558,6 +607,7 @@ def calendar_view(dept_id):
         'earning_start': earning_start,
         'earning_end': earning_end,
         'monthly_chart': monthly_chart,
+        'user_entitlement': user_entitlement,
         'suggested_per_month': suggested if monthly_chart else 0,
         'admin_summaries': admin_summaries,
         'pending_reviews': pending_reviews,
@@ -590,6 +640,7 @@ def add_vacation():
     user_id = request.form.get('user_id', type=int)
     vacation_date = request.form.get('vacation_date')
     end_date = request.form.get('end_date')
+    self_paid = request.form.get('self_paid') == '1'
     if not user_id or not vacation_date:
         flash(_('Please select a user and date.'), 'error')
         return redirect(url_for('calendar_redirect'))
@@ -599,7 +650,7 @@ def add_vacation():
         flash(_('End date must be after start date.'), 'error')
         return redirect(url_for('calendar_redirect'))
     requester = session.get('username', '')
-    added, skipped = db.add_vacation_for_user(user_id, start, end, requested_by=requester)
+    added, skipped = db.add_vacation_for_user(user_id, start, end, requested_by=requester, self_paid=self_paid)
     if added:
         flash(_('Added {} vacation day(s)!').format(added), 'success')
     if skipped:
@@ -954,6 +1005,14 @@ def admin_change_password(user_id):
     return redirect(url_for('user_management'))
 
 
+@app.route('/users/<int:user_id>/reset-holidays', methods=['POST'])
+@admin_required
+def reset_user_holidays(user_id):
+    db.reset_user_holidays(user_id)
+    flash(_('Holiday data reset. User will set up their balance on next login.'), 'success')
+    return redirect(url_for('user_management'))
+
+
 # ---------------------------------------------------------------------------
 # Settings (admin)
 # ---------------------------------------------------------------------------
@@ -1297,6 +1356,93 @@ def logs():
     return render_template('logs.html', entries=entries, users=users,
                            filter_user_id=user_id, filter_operation_type=operation_type,
                            active_tab='logs')
+
+
+# ---------------------------------------------------------------------------
+# Chart demo (vacation pace visualisation options)
+# ---------------------------------------------------------------------------
+
+@app.route('/chart-demo')
+@login_required
+def chart_demo():
+    today = date.today()
+    period_id = db.get_current_period_id()
+    if not period_id:
+        flash(_('No active holiday period.'), 'error')
+        return redirect('/calendar')
+
+    periods = db.get_holiday_periods()
+    period_start = period_end_date = earning_start = earning_end = None
+    period_label = None
+    for pid, plabel, pstart, pend, estart, eend in periods:
+        if pid == period_id:
+            period_label = plabel
+            period_start = pstart
+            period_end_date = pend
+            earning_start = estart or pstart
+            earning_end = eend or pend
+            break
+
+    if not period_start:
+        flash(_('No active holiday period.'), 'error')
+        return redirect('/calendar')
+
+    period_summary = db.get_period_vacation_summary(
+        session['user_id'], period_start, period_end_date,
+        earning_start=earning_start, earning_end=earning_end)
+    months_left = (period_end_date.year - today.year) * 12 + period_end_date.month - today.month
+    if months_left < 1:
+        months_left = 1
+    period_summary['months_left'] = months_left
+
+    vacation_summary = db.get_vacation_summary(
+        session['user_id'], period_start, period_end_date,
+        earning_start=earning_start, earning_end=earning_end)
+
+    usage_by_month = db.get_vacation_days_per_month(
+        session['user_id'], period_start, period_end_date)
+    suggested = round(period_summary['remaining'] / months_left, 1)
+
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    entitlement = period_summary.get('days_off_per_year', 0)
+    monthly_chart = []
+    cumulative_used = 0
+    d = date(period_start.year, period_start.month, 1)
+    end_m = date(period_end_date.year, period_end_date.month, 1)
+    while d <= end_m:
+        used_m = usage_by_month.get((d.year, d.month), 0)
+        is_past = (d.year < today.year) or (d.year == today.year and d.month < today.month)
+        is_current = (d.year == today.year and d.month == today.month)
+        cumulative_used += used_m
+        # How many full earning months have elapsed by end of this month
+        earning_months_elapsed = (d.year - earning_start.year) * 12 + d.month - earning_start.month + 1
+        accrued = min(entitlement, round(entitlement / 12 * max(0, earning_months_elapsed), 1))
+        monthly_chart.append({
+            'label': month_names[d.month - 1],
+            'year': d.year,
+            'used': used_m,
+            'cumulative_used': cumulative_used,
+            'accrued': accrued,
+            'balance': round(accrued - cumulative_used, 1),
+            'is_past': is_past,
+            'is_current': is_current,
+            'is_future': not is_past and not is_current,
+        })
+        if d.month == 12:
+            d = date(d.year + 1, 1, 1)
+        else:
+            d = date(d.year, d.month + 1, 1)
+
+    return render_template('chart_demo.html',
+                           today=today,
+                           monthly_chart=monthly_chart,
+                           suggested_per_month=suggested,
+                           period_summary=period_summary,
+                           vacation_summary=vacation_summary,
+                           period_label=period_label,
+                           period_end_date=period_end_date,
+                           entitlement=entitlement)
 
 
 # ---------------------------------------------------------------------------

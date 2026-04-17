@@ -96,12 +96,6 @@ function toggleFullWidth() {
     {% include "partials/_calendar_grid.html" %}
 </div>
 
-<div class="flex items-center gap-3 mt-3 text-xs text-gray-500 dark:text-gray-400">
-    <span class="inline-flex items-center gap-1"><span class="inline-block w-4 h-4 rounded bg-borsen-pink"></span> {{ _('Vacation') }}</span>
-    {% if review_dates %}
-    <span class="inline-flex items-center gap-1"><span class="relative inline-block w-4 h-4 rounded bg-gray-100 dark:bg-gray-700"><span class="review-tri" style="background:#f59e0b"></span></span> {{ _('Review period') }}</span>
-    {% endif %}
-</div>
 
 <div class="flex items-center justify-end mt-4">
     <button onclick="document.getElementById('vacation-modal').classList.remove('hidden')"
@@ -150,77 +144,150 @@ function toggleFullWidth() {
         </div>
 
         {% if monthly_chart %}
-        <div class="bg-borsen-cream dark:bg-gray-700/50 rounded-lg p-4">
-            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400">{{ _('Days off per month') }}</h3>
-            <p class="text-xs text-gray-400 dark:text-gray-500 mb-3">{{ _('Historical and projected') }}</p>
-            {% set bar_max = [suggested_per_month] %}
+        <div class="bg-borsen-cream dark:bg-gray-700/50 rounded-lg p-4 relative" id="balance-chart-card">
+            <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400">{{ _('Holiday balance') }}</h3>
+            <div id="balance-chart-tip" class="hidden absolute z-20 px-2 py-1 text-[10px] leading-tight rounded bg-gray-900 text-white shadow pointer-events-none whitespace-pre"></div>
+            {% set n = monthly_chart|length %}
+            {% set y_max = (user_entitlement + 2) if user_entitlement > 0 else 1 %}
+            {% set svg_w = 280 %}
+            {% set svg_h = 110 %}
+            {% set pad_l = 22 %}
+            {% set pad_r = 6 %}
+            {% set pad_t = 12 %}
+            {% set pad_b = 20 %}
+            {% set plot_w = svg_w - pad_l - pad_r %}
+            {% set plot_h = svg_h - pad_t - pad_b %}
+
+            {# Build coordinate lists #}
+            {% set accrual_pts = [] %}
+            {% set balance_pts = [] %}
+            {% set balance_future_pts = [] %}
+            {% set cum_used_at_now = [0] %}{# total used through current month #}
+            {% set extra_future = [0] %}{# additional planned used in future months #}
             {% for m in monthly_chart %}
+                {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                {% set y_acc = pad_t + (1 - m.accrued / y_max) * plot_h %}
+                {% set y_acc = [y_acc, pad_t]|max %}
+                {% set _d = accrual_pts.append('{},{}'.format(x|round(1), y_acc|round(1))) %}
                 {% if m.is_past or m.is_current %}
-                    {% set bar_val = m.used %}
+                    {% set y_bal = pad_t + (1 - m.balance / y_max) * plot_h %}
+                    {% set y_bal = [[y_bal, pad_t]|max, pad_t + plot_h]|min %}
+                    {% set _d = balance_pts.append('{},{}'.format(x|round(1), y_bal|round(1))) %}
+                    {# Keep tracking cumulative used (= accrued - balance) #}
+                    {% set _d = cum_used_at_now.pop() %}{% set _d = cum_used_at_now.append(m.accrued - m.balance) %}
+                    {% if m.is_current %}
+                        {% set _d = balance_future_pts.append('{},{}'.format(x|round(1), y_bal|round(1))) %}
+                    {% endif %}
                 {% else %}
-                    {% set bar_val = m.used + (suggested_per_month if suggested_per_month > 0 else 0) %}
+                    {# Future: balance = m.accrued (capped at entitlement) - past used - extra future planned #}
+                    {% set new_extra = extra_future[0] + m.used %}
+                    {% set _d = extra_future.pop() %}{% set _d = extra_future.append(new_extra) %}
+                    {% set proj = m.accrued - cum_used_at_now[0] - new_extra %}
+                    {% set y_proj = pad_t + (1 - proj / y_max) * plot_h %}
+                    {% set y_proj = [[y_proj, pad_t]|max, pad_t + plot_h]|min %}
+                    {% set _d = balance_future_pts.append('{},{}'.format(x|round(1), y_proj|round(1))) %}
                 {% endif %}
-                {% if bar_val > bar_max[0] %}{% set _x = bar_max.pop() %}{% set _x = bar_max.append(bar_val) %}{% endif %}
             {% endfor %}
-            {% set bmax = bar_max[0] if bar_max[0] > 0 else 1 %}
-            <div class="relative">
-                <div class="flex items-end gap-px" style="height: 100px;">
-                    {% for m in monthly_chart %}
-                    {% if m.is_future %}
-                    {% set planned = m.used %}
-                    {% set suggested = suggested_per_month if suggested_per_month > 0 else 0 %}
-                    {% set total = planned + suggested %}
-                    {% if total <= 0 %}
-                    <div class="flex-1"></div>
-                    {% else %}
-                    {% set total_px = total / bmax * 100 %}
-                    {% set sug_px = total_px * suggested / total if total > 0 else 0 %}
-                    {% set planned_px = total_px * planned / total if total > 0 else 0 %}
-                    <div class="flex-1 flex flex-col items-center h-full justify-end">
-                        <div class="w-full relative flex flex-col items-stretch justify-end" style="height: {{ total_px|round }}%;">
-                            {% if suggested > 0 %}
-                            <div class="w-full rounded-t bg-amber-300 dark:bg-amber-600 relative" style="flex: {{ suggested }} {{ suggested }} 0%;">
-                                {% if sug_px > 30 %}
-                                <span class="absolute inset-x-0 top-1.5 text-center text-xs font-semibold" style="color: var(--ink);">{{ suggested|round|int }}</span>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                            {% if planned > 0 %}
-                            <div class="w-full {{ 'rounded-t' if suggested <= 0 else '' }} bg-borsen-pink dark:bg-borsen-pink relative" style="flex: {{ planned }} {{ planned }} 0%;">
-                                {% if planned_px > 30 %}
-                                <span class="absolute inset-x-0 top-1.5 text-center text-xs font-semibold" style="color: var(--ink);">{{ planned|round|int }}</span>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endif %}
-                    {% else %}
-                    {% set bar_px = m.used / bmax * 100 %}
-                    <div class="flex-1 flex flex-col items-center h-full justify-end">
-                        <div class="w-full relative flex items-end justify-center" style="height: {{ bar_px|round }}%;">
-                            {% if m.used > 0 and bar_px > 30 %}
-                            <span class="absolute inset-x-0 top-1.5 text-center text-xs font-semibold" style="color: var(--ink);">{{ m.used|round|int }}</span>
-                            {% endif %}
-                            <div class="w-full h-full rounded-t bg-borsen-pink dark:bg-borsen-pink"></div>
-                        </div>
-                    </div>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="flex gap-px mt-1">
-                {% for m in monthly_chart %}
-                <div class="flex-1 text-center text-[9px] text-gray-400 dark:text-gray-500 leading-tight">{{ m.label }}</div>
+
+            {% set now_idx = [] %}
+            {% for m in monthly_chart %}{% if m.is_current %}{% set _d = now_idx.append(loop.index0) %}{% endif %}{% endfor %}
+
+            <svg viewBox="0 0 {{ svg_w }} {{ svg_h }}" class="w-full" style="max-height: 130px;">
+                {# Grid lines #}
+                {% for i in range(4) %}
+                {% set gy = pad_t + plot_h * i / 3 %}
+                <line x1="{{ pad_l }}" y1="{{ gy|round(1) }}" x2="{{ svg_w - pad_r }}" y2="{{ gy|round(1) }}" stroke="currentColor" stroke-opacity="0.07" stroke-width="0.5"/>
+                {% set lv = (y_max * (3 - i) / 3)|round|int %}
+                <text x="{{ pad_l - 3 }}" y="{{ gy|round(1) + 3 }}" text-anchor="end" class="fill-gray-400 dark:fill-gray-500" style="font-size:7px;">{{ lv }}</text>
                 {% endfor %}
-            </div>
-            {% set has_future_planned = monthly_chart|selectattr('is_future')|selectattr('used', 'gt', 0)|list|length > 0 %}
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] text-gray-400 dark:text-gray-500">
-                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-borsen-pink dark:bg-borsen-pink"></span> {{ _('Used') }}{% if has_future_planned %} / {{ _('Planned') }}{% endif %}</span>
-                {% if suggested_per_month > 0 %}
-                <span class="flex items-center gap-1"><span class="inline-block w-2 h-1.5 rounded bg-amber-300 dark:bg-amber-600"></span> {{ _('Required burn rate') }} ({{ suggested_per_month }}/mo)</span>
+
+                {# Shaded area under balance #}
+                {% if balance_pts|length > 1 %}
+                {% set first_x = balance_pts[0].split(',')[0] %}
+                {% set last_x = balance_pts[-1].split(',')[0] %}
+                <polygon points="{{ balance_pts|join(' ') }} {{ last_x }},{{ (pad_t + plot_h)|round(1) }} {{ first_x }},{{ (pad_t + plot_h)|round(1) }}" fill="#db3d7f" fill-opacity="0.10"/>
                 {% endif %}
+
+                {# Accrual line (dashed amber) #}
+                {% if accrual_pts|length > 1 %}
+                <polyline points="{{ accrual_pts|join(' ') }}" fill="none" stroke="#d97706" stroke-width="1" stroke-dasharray="4,2" stroke-opacity="0.45"/>
+                {% endif %}
+
+                {# Balance line — solid past, dashed future #}
+                {% if balance_pts|length > 1 %}
+                <polyline points="{{ balance_pts|join(' ') }}" fill="none" stroke="#db3d7f" stroke-width="2" stroke-linejoin="round"/>
+                {% endif %}
+                {% if balance_future_pts|length > 1 %}
+                <polyline points="{{ balance_future_pts|join(' ') }}" fill="none" stroke="#db3d7f" stroke-width="1.5" stroke-dasharray="3,2" stroke-opacity="0.5" stroke-linejoin="round"/>
+                {% endif %}
+
+                {# Dots on past/current #}
+                {% for m in monthly_chart %}
+                    {% if m.is_past or m.is_current %}
+                    {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                    {% set y_bal = pad_t + (1 - m.balance / y_max) * plot_h %}
+                    {% set y_bal = [[y_bal, pad_t]|max, pad_t + plot_h]|min %}
+                    <circle cx="{{ x|round(1) }}" cy="{{ y_bal|round(1) }}" r="2.5" fill="#db3d7f"/>
+                    {% endif %}
+                {% endfor %}
+
+                {# Now marker #}
+                {% if now_idx %}
+                {% set nx = pad_l + now_idx[0] / ((n - 1) if n > 1 else 1) * plot_w %}
+                <line x1="{{ nx|round(1) }}" y1="{{ pad_t }}" x2="{{ nx|round(1) }}" y2="{{ pad_t + plot_h }}" stroke="#c8102e" stroke-width="0.75" stroke-dasharray="2,2" stroke-opacity="0.4"/>
+                {% endif %}
+
+                {# Current available reference line #}
+                {% if vacation_summary and user_entitlement > 0 %}
+                {% set avail = (vacation_summary.accrued - vacation_summary.used)|round(1) %}
+                {% set y_avail = pad_t + (1 - avail / y_max) * plot_h %}
+                {% set y_avail = [[y_avail, pad_t]|max, pad_t + plot_h]|min %}
+                <line x1="{{ pad_l }}" y1="{{ y_avail|round(1) }}" x2="{{ svg_w - pad_r }}" y2="{{ y_avail|round(1) }}" stroke="#9333ea" stroke-width="0.5" stroke-dasharray="2,2" stroke-opacity="0.7"/>
+                <text x="{{ pad_l - 3 }}" y="{{ y_avail|round(1) + 3 }}" text-anchor="end" fill="#9333ea" style="font-size:7px; font-weight: 600;">{{ avail }}</text>
+                {% endif %}
+
+                {# Month labels #}
+                {% for m in monthly_chart %}
+                {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                <text x="{{ x|round(1) }}" y="{{ pad_t + plot_h + 10 }}" text-anchor="middle" class="fill-gray-400 dark:fill-gray-500" style="font-size:7px;">{{ m.label }}</text>
+                {% endfor %}
+
+                {# Invisible per-month hover columns; JS reads data-tip and shows the HTML tooltip #}
+                {% set step = (plot_w / (n - 1)) if n > 1 else plot_w %}
+                {% for m in monthly_chart %}
+                {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                <rect x="{{ (x - step / 2)|round(1) }}" y="{{ pad_t }}" width="{{ step|round(1) }}" height="{{ plot_h }}" fill="white" fill-opacity="0" pointer-events="all" class="balance-chart-hit" data-tip="{{ m.label }} {{ m.year }}&#10;{{ _('Accrued') }}: {{ m.accrued }}&#10;{{ _('Balance') }}: {{ m.balance }}{% if m.is_future %} ({{ _('projected') }}){% endif %}"/>
+                {% endfor %}
+            </svg>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[9px] text-gray-400 dark:text-gray-500">
+                <span class="flex items-center gap-1"><span class="inline-block w-3 h-0 border-t-[1.5px] border-borsen-pink"></span> {{ _('Balance') }}</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-3 h-0 border-t border-amber-500 border-dashed opacity-50"></span> {{ _('Accrued') }}</span>
             </div>
+            <script>
+                (function () {
+                    const card = document.getElementById('balance-chart-card');
+                    const tip = document.getElementById('balance-chart-tip');
+                    if (!card || !tip) return;
+                    card.querySelectorAll('.balance-chart-hit').forEach(function (el) {
+                        el.addEventListener('mouseenter', function () {
+                            tip.textContent = el.getAttribute('data-tip') || '';
+                            tip.classList.remove('hidden');
+                        });
+                        el.addEventListener('mousemove', function (ev) {
+                            const cardRect = card.getBoundingClientRect();
+                            let left = ev.clientX - cardRect.left + 12;
+                            let top = ev.clientY - cardRect.top + 12;
+                            const maxLeft = card.clientWidth - tip.offsetWidth - 4;
+                            if (left > maxLeft) left = maxLeft;
+                            tip.style.left = left + 'px';
+                            tip.style.top = top + 'px';
+                        });
+                        el.addEventListener('mouseleave', function () {
+                            tip.classList.add('hidden');
+                        });
+                    });
+                })();
+            </script>
         </div>
         {% endif %}
     </div>
@@ -240,7 +307,7 @@ function toggleFullWidth() {
                     <th class="text-right py-2 font-medium" onclick="sortTable(2)">{{ _('Used') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-right py-2 font-medium" onclick="sortTable(3)">{{ _('Remaining') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-right py-2 font-medium" onclick="sortTable(4)">{{ _('Available') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
-                    <th class="text-left py-2 font-medium pl-4" onclick="sortTable(5)">{{ _('Days/month') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
+                    <th class="text-left py-2 font-medium pl-4" onclick="sortTable(5)">{{ _('Balance') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
                     <th class="text-right py-2 font-medium whitespace-nowrap" style="width: 1%;" onclick="sortTable(6)">{{ _('Last login') }} <span class="sort-icon text-gray-400">&#8597;</span></th>
                 </tr>
             </thead>
@@ -257,46 +324,75 @@ function toggleFullWidth() {
                     <td class="py-2.5 text-right font-medium {% if available < 0 %}text-red-600 dark:text-red-400{% elif available == 0 %}text-amber-600 dark:text-amber-400{% else %}text-green-600 dark:text-green-400{% endif %}">
                         {{ available }}
                     </td>
-                    <td class="py-2 pl-4">
+                    <td class="py-1.5 pl-4">
                         {% if user_chart %}
-                        {% set DAY_PX = 3 %}
-                        {% set CAP_PX = 45 %}
-                        <div class="inline-block align-bottom" style="width: 180px;" data-sort-value="{{ user_suggested }}">
-                            <div class="relative flex items-end gap-px overflow-hidden" style="height: {{ CAP_PX }}px;">
-                                {% for m in user_chart %}
-                                {% set planned = m.used %}
-                                {% set sug = user_suggested if m.is_future and user_suggested > 0 else 0 %}
-                                {% set planned_px = (planned * DAY_PX)|round|int %}
-                                {% set sug_px = (sug * DAY_PX)|round|int %}
-                                {% set clipped = (planned_px + sug_px) > CAP_PX %}
-                                {% if planned_px + sug_px <= 0 %}
-                                <div class="flex-1"></div>
-                                {% else %}
-                                <div class="flex-1 flex flex-col justify-end relative" style="height: 100%;">
-                                    {% if sug_px > 0 %}
-                                    <div class="w-full bg-amber-300 dark:bg-amber-600 {{ 'rounded-t-sm' if not clipped else '' }}" style="height: {{ sug_px }}px;"></div>
-                                    {% endif %}
-                                    {% if planned_px > 0 %}
-                                    <div class="w-full bg-borsen-pink dark:bg-borsen-pink {{ 'rounded-t-sm' if sug_px == 0 and not clipped else '' }}" style="height: {{ planned_px }}px;"></div>
-                                    {% endif %}
-                                    {% if clipped %}
-                                    <svg class="absolute left-0 w-full pointer-events-none" style="top: 0; height: 5px;" viewBox="0 0 12 5" preserveAspectRatio="none">
-                                        <path d="M0,3.5 L2,1 L4,3.5 L6,1 L8,3.5 L10,1 L12,3.5" stroke="var(--blue-dark)" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
-                                    {% endif %}
-                                </div>
+                        {% set uc_n = user_chart|length %}
+                        {% set uc_ymax = (entitlement + 2) if entitlement > 0 else 1 %}
+                        {% set uc_w = 300 %}
+                        {% set uc_h = 65 %}
+                        {% set uc_pl = 14 %}
+                        {% set uc_pr = 2 %}
+                        {% set uc_pt = 2 %}
+                        {% set uc_pb = 10 %}
+                        {% set uc_pw = uc_w - uc_pl - uc_pr %}
+                        {% set uc_ph = uc_h - uc_pt - uc_pb %}
+                        {# Build points #}
+                        {% set uc_acc = [] %}
+                        {% set uc_bal = [] %}
+                        {% set uc_bal_f = [] %}
+                        {% set uc_cum_used = [0] %}
+                        {% set uc_extra = [0] %}
+                        {% set uc_last_bal = [0] %}
+                        {% for m in user_chart %}
+                            {% set x = uc_pl + loop.index0 / ((uc_n - 1) if uc_n > 1 else 1) * uc_pw %}
+                            {% set ya = uc_pt + (1 - m.accrued / uc_ymax) * uc_ph %}
+                            {% set yb = uc_pt + (1 - m.balance / uc_ymax) * uc_ph %}
+                            {% set ya = [ya, uc_pt]|max %}
+                            {% set yb = [[yb, uc_pt]|max, uc_pt + uc_ph]|min %}
+                            {% set _d = uc_acc.append('{},{}'.format(x|round(1), ya|round(1))) %}
+                            {% if m.is_past or m.is_current %}
+                                {% set _d = uc_bal.append('{},{}'.format(x|round(1), yb|round(1))) %}
+                                {% set _d = uc_cum_used.pop() %}{% set _d = uc_cum_used.append(m.accrued - m.balance) %}
+                                {% if m.is_current %}
+                                    {% set _d = uc_bal_f.append('{},{}'.format(x|round(1), yb|round(1))) %}
                                 {% endif %}
-                                {% endfor %}
-                            </div>
-                            <div class="flex gap-px mt-0.5">
+                                {% set _d = uc_last_bal.pop() %}{% set _d = uc_last_bal.append(m.balance) %}
+                            {% else %}
+                                {% set new_extra = uc_extra[0] + m.used %}
+                                {% set _d = uc_extra.pop() %}{% set _d = uc_extra.append(new_extra) %}
+                                {% set proj = m.accrued - uc_cum_used[0] - new_extra %}
+                                {% set yp = uc_pt + (1 - proj / uc_ymax) * uc_ph %}
+                                {% set yp = [[yp, uc_pt]|max, uc_pt + uc_ph]|min %}
+                                {% set _d = uc_bal_f.append('{},{}'.format(x|round(1), yp|round(1))) %}
+                            {% endif %}
+                        {% endfor %}
+                        {% set uc_ymid = (uc_ymax / 2)|round|int %}
+                        <div class="inline-block" data-sort-value="{{ uc_last_bal[0] }}">
+                            <svg viewBox="0 0 {{ uc_w }} {{ uc_h }}" style="width: {{ uc_w }}px; height: {{ uc_h }}px;">
+                                {# Y-axis labels: top, mid, 0 #}
+                                <text x="{{ uc_pl - 2 }}" y="{{ uc_pt + 4 }}" text-anchor="end" class="fill-gray-400 dark:fill-gray-500" style="font-size:6.5px;">{{ uc_ymax|round|int }}</text>
+                                <text x="{{ uc_pl - 2 }}" y="{{ uc_pt + uc_ph / 2 + 2 }}" text-anchor="end" class="fill-gray-400 dark:fill-gray-500" style="font-size:6.5px;">{{ uc_ymid }}</text>
+                                <text x="{{ uc_pl - 2 }}" y="{{ uc_pt + uc_ph + 2 }}" text-anchor="end" class="fill-gray-400 dark:fill-gray-500" style="font-size:6.5px;">0</text>
+                                {# Y-axis grid lines #}
+                                <line x1="{{ uc_pl }}" y1="{{ uc_pt + uc_ph / 2 }}" x2="{{ uc_w - uc_pr }}" y2="{{ uc_pt + uc_ph / 2 }}" stroke="currentColor" stroke-opacity="0.06" stroke-width="0.5"/>
+                                <line x1="{{ uc_pl }}" y1="{{ uc_pt + uc_ph }}" x2="{{ uc_w - uc_pr }}" y2="{{ uc_pt + uc_ph }}" stroke="currentColor" stroke-opacity="0.06" stroke-width="0.5"/>
+                                {# X-axis month letters #}
                                 {% for m in user_chart %}
-                                <div class="flex-1 text-center text-[9px] text-gray-400 dark:text-gray-500 leading-none">{{ m.label[0] }}</div>
+                                {% set mx = uc_pl + loop.index0 / ((uc_n - 1) if uc_n > 1 else 1) * uc_pw %}
+                                <text x="{{ mx|round(1) }}" y="{{ uc_h - 1 }}" text-anchor="middle" class="fill-gray-400 dark:fill-gray-500" style="font-size:6.5px;">{{ m.label }}</text>
                                 {% endfor %}
-                            </div>
+                                {# Lines #}
+                                {% if uc_acc|length > 1 %}
+                                <polyline points="{{ uc_acc|join(' ') }}" fill="none" stroke="#d97706" stroke-width="0.75" stroke-dasharray="3,2" stroke-opacity="0.4"/>
+                                {% endif %}
+                                {% if uc_bal|length > 1 %}
+                                <polyline points="{{ uc_bal|join(' ') }}" fill="none" stroke="#db3d7f" stroke-width="1.5" stroke-linejoin="round"/>
+                                {% endif %}
+                                {% if uc_bal_f|length > 1 %}
+                                <polyline points="{{ uc_bal_f|join(' ') }}" fill="none" stroke="#db3d7f" stroke-width="1" stroke-dasharray="2,2" stroke-opacity="0.45" stroke-linejoin="round"/>
+                                {% endif %}
+                            </svg>
                         </div>
-                        {% if user_suggested > 0 %}
-                        <span class="text-[9px] text-gray-400 dark:text-gray-500 ml-1">{{ user_suggested }}/mo</span>
-                        {% endif %}
                         {% endif %}
                     </td>
                     <td class="py-2.5 text-right text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" style="width: 1%;" {% if last_login %}data-sort-value="{{ last_login.strftime('%Y%m%d%H%M') }}"{% else %}data-sort-value="0"{% endif %}>
@@ -494,6 +590,20 @@ function toggleFullWidth() {
         'box-shadow:0 2px 8px rgba(0,0,0,0.25);display:none;';
     document.body.appendChild(tip);
 
+    var lbl = {
+        vacation: '{{ _("Vacation") }}',
+        created: '{{ _("Created:") }}',
+        by: '{{ _("By:") }}',
+        reviewRequest: '{{ _("Review Request") }}',
+        status: '{{ _("Status:") }}',
+        active: '{{ _("Active") }}',
+        inactive: '{{ _("Inactive") }}',
+        activated: '{{ _("Activated:") }}',
+        createdBy: '{{ _("Created by:") }}',
+        selfPaid: '{{ _("Self paid") }}'
+    };
+    var sectionHead = 'font-size:10px;text-transform:uppercase;letter-spacing:0.05em;opacity:0.45;margin-bottom:2px';
+
     function esc(s) {
         var d = document.createElement('div');
         d.textContent = s;
@@ -501,12 +611,33 @@ function toggleFullWidth() {
     }
 
     function show(cell) {
+        var parts = [];
         var createdAt = cell.dataset.createdAt || '';
         var createdBy = cell.dataset.createdBy || '';
-        if (!createdAt && !createdBy) return false;
-        tip.innerHTML =
-            '<div><span style="opacity:0.65">Created:</span> ' + esc(createdAt) + '</div>' +
-            '<div><span style="opacity:0.65">By:</span> ' + esc(createdBy) + '</div>';
+        var reviewTitle = cell.dataset.reviewTitle || '';
+        var hasVacation = createdAt || createdBy;
+        if (hasVacation) {
+            if (reviewTitle) parts.push('<div style="' + sectionHead + '">' + esc(lbl.vacation) + '</div>');
+            if (cell.dataset.selfPaid === '1') parts.push('<div style="color:#fbbf24;font-weight:600">' + esc(lbl.selfPaid) + '</div>');
+            if (createdAt) parts.push('<div><span style="opacity:0.65">' + esc(lbl.created) + '</span> ' + esc(createdAt) + '</div>');
+            if (createdBy) parts.push('<div><span style="opacity:0.65">' + esc(lbl.by) + '</span> ' + esc(createdBy) + '</div>');
+        }
+        if (reviewTitle) {
+            if (hasVacation) parts.push('<div style="border-top:1px solid rgba(255,255,255,0.15);margin:4px 0"></div>');
+            parts.push('<div style="' + sectionHead + '">' + esc(lbl.reviewRequest) + '</div>');
+            var isActive = cell.dataset.reviewActive === 'true';
+            parts.push('<div>' + esc(reviewTitle) + '</div>');
+            parts.push('<div><span style="opacity:0.65">' + esc(lbl.status) + '</span> ' +
+                (isActive ? '<span style="color:#4ade80">' + esc(lbl.active) + '</span>' : '<span style="opacity:0.5">' + esc(lbl.inactive) + '</span>') + '</div>');
+            if (isActive && cell.dataset.reviewActivated) {
+                parts.push('<div><span style="opacity:0.65">' + esc(lbl.activated) + '</span> ' + esc(cell.dataset.reviewActivated) + '</div>');
+            }
+            if (cell.dataset.reviewCreator) {
+                parts.push('<div><span style="opacity:0.65">' + esc(lbl.createdBy) + '</span> ' + esc(cell.dataset.reviewCreator) + '</div>');
+            }
+        }
+        if (!parts.length) return false;
+        tip.innerHTML = parts.join('');
         tip.style.display = 'block';
         return true;
     }
@@ -526,8 +657,8 @@ function toggleFullWidth() {
 
     document.addEventListener('mousemove', function(e) {
         if (e.buttons) { hide(); return; }
-        var cell = e.target.closest('.cal-cell[data-type="vacation"]');
-        if (cell && cell.dataset.createdAt) {
+        var cell = e.target.closest('.cal-cell');
+        if (cell && (cell.dataset.createdAt || cell.dataset.reviewTitle)) {
             if (show(cell)) position(e.clientX, e.clientY);
         } else {
             hide();
@@ -572,6 +703,16 @@ function toggleFullWidth() {
                 <label class="block text-sm font-medium mb-1">{{ _('End Date') }}</label>
                 <input type="date" name="end_date"
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
+            </div>
+            <div>
+                <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+                    <input type="checkbox" name="self_paid" value="1"
+                           class="rounded border-gray-300 dark:border-gray-600 text-borsen-red focus:ring-borsen-red">
+                    <span>{{ _('Self-paid holiday') }}</span>
+                </label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                    {{ _('Does not count against your holiday balance.') }}
+                </p>
             </div>
             <div class="flex justify-end space-x-2 pt-2">
                 <button type="button" onclick="document.getElementById('vacation-modal').classList.add('hidden')"

@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Vacation Pace — Visualisation Options') }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto py-8 px-4">
+    <h1 class="text-2xl font-bold mb-1">{{ _('Vacation Pace — Visualisation Options') }}</h1>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+        {{ _('Holiday Period') }} {{ period_label }} &middot;
+        {{ _('Ends') }} {{ period_end_date|fmtdate }} &middot;
+        <strong>{{ period_summary.months_left }} {{ _('months remaining') if period_summary.months_left != 1 else _('month remaining') }}</strong>
+    </p>
+    <p class="text-xs text-gray-400 dark:text-gray-500 mb-8">
+        {{ _('Entitlement') }}: {{ entitlement }} &middot;
+        {{ _('Used') }}: {{ period_summary.used }} &middot;
+        {{ _('Remaining') }}: {{ period_summary.remaining }}
+    </p>
+
+    {% set has_future_planned = monthly_chart|selectattr('is_future')|selectattr('used', 'gt', 0)|list|length > 0 %}
+
+    {# ------------------------------------------------------------------ #}
+    {# OPTION A — Current stacked bar chart (for reference)               #}
+    {# ------------------------------------------------------------------ #}
+    <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
+        <h2 class="text-lg font-semibold mb-1">{{ _('Option A: Stacked Bar Chart') }} <span class="text-sm font-normal text-gray-400">({{ _('current') }})</span></h2>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">{{ _('Pink = actual usage. Amber stacked on top = burn-rate target for future months.') }}</p>
+
+        {% set bar_max = [suggested_per_month] %}
+        {% for m in monthly_chart %}
+            {% if m.is_past or m.is_current %}{% set bar_val = m.used %}{% else %}{% set bar_val = m.used + (suggested_per_month if suggested_per_month > 0 else 0) %}{% endif %}
+            {% if bar_val > bar_max[0] %}{% set _x = bar_max.pop() %}{% set _x = bar_max.append(bar_val) %}{% endif %}
+        {% endfor %}
+        {% set bmax = bar_max[0] if bar_max[0] > 0 else 1 %}
+
+        <div class="max-w-lg">
+            <div class="flex items-end gap-1" style="height: 120px;">
+                {% for m in monthly_chart %}
+                {% if m.is_future %}
+                    {% set planned = m.used %}
+                    {% set suggested = suggested_per_month if suggested_per_month > 0 else 0 %}
+                    {% set total = planned + suggested %}
+                    {% if total <= 0 %}
+                    <div class="flex-1"></div>
+                    {% else %}
+                    {% set total_px = total / bmax * 100 %}
+                    <div class="flex-1 flex flex-col items-center h-full justify-end">
+                        <div class="w-full relative flex flex-col items-stretch justify-end" style="height: {{ total_px|round }}%;">
+                            {% if suggested > 0 %}
+                            <div class="w-full rounded-t bg-amber-300 dark:bg-amber-600 relative" style="flex: {{ suggested }} {{ suggested }} 0%;">
+                                {% if total_px > 35 %}<span class="absolute inset-x-0 top-1 text-center text-xs font-semibold" style="color: var(--ink);">{{ suggested|round(1) }}</span>{% endif %}
+                            </div>
+                            {% endif %}
+                            {% if planned > 0 %}
+                            <div class="w-full {{ 'rounded-t' if suggested <= 0 else '' }} bg-borsen-pink dark:bg-borsen-pink relative" style="flex: {{ planned }} {{ planned }} 0%;">
+                                {% if total_px * planned / total > 35 %}<span class="absolute inset-x-0 top-1 text-center text-xs font-semibold" style="color: var(--ink);">{{ planned|round|int }}</span>{% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    {% set bar_px = m.used / bmax * 100 %}
+                    <div class="flex-1 flex flex-col items-center h-full justify-end">
+                        <div class="w-full relative flex items-end justify-center" style="height: {{ bar_px|round }}%;">
+                            {% if m.used > 0 and bar_px > 35 %}<span class="absolute inset-x-0 top-1 text-center text-xs font-semibold" style="color: var(--ink);">{{ m.used|round|int }}</span>{% endif %}
+                            <div class="w-full h-full rounded-t bg-borsen-pink dark:bg-borsen-pink"></div>
+                        </div>
+                    </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            <div class="flex gap-1 mt-1">
+                {% for m in monthly_chart %}
+                <div class="flex-1 text-center text-[10px] text-gray-400 dark:text-gray-500">{{ m.label }}</div>
+                {% endfor %}
+            </div>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs text-gray-400 dark:text-gray-500">
+                <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-2 rounded bg-borsen-pink"></span> {{ _('Used') }}{% if has_future_planned %} / {{ _('Planned') }}{% endif %}</span>
+                {% if suggested_per_month > 0 %}
+                <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-2 rounded bg-amber-300 dark:bg-amber-600"></span> {{ _('Required burn rate') }} ({{ suggested_per_month }}/{{ _('mo') }})</span>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    {# ------------------------------------------------------------------ #}
+    {# OPTION B — Burn-down line chart (SVG)                              #}
+    {# ------------------------------------------------------------------ #}
+    <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
+        <h2 class="text-lg font-semibold mb-1">{{ _('Option B: Burn-down Chart') }}</h2>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">{{ _('Shows remaining days declining over the year. The dashed line is the ideal even pace. If the solid line is above the dashed line, you are behind.') }}</p>
+
+        {% set n = monthly_chart|length %}
+        {% set remaining_total = period_summary.remaining + period_summary.used %}
+        {% set svg_w = 500 %}
+        {% set svg_h = 160 %}
+        {% set pad_l = 30 %}
+        {% set pad_r = 10 %}
+        {% set pad_t = 15 %}
+        {% set pad_b = 30 %}
+        {% set plot_w = svg_w - pad_l - pad_r %}
+        {% set plot_h = svg_h - pad_t - pad_b %}
+        {% set y_max = remaining_total if remaining_total > 0 else 1 %}
+
+        <div class="max-w-lg">
+            <svg viewBox="0 0 {{ svg_w }} {{ svg_h }}" class="w-full" style="max-height: 200px;">
+                {# Grid lines #}
+                {% for i in range(5) %}
+                {% set gy = pad_t + plot_h * i / 4 %}
+                <line x1="{{ pad_l }}" y1="{{ gy }}" x2="{{ svg_w - pad_r }}" y2="{{ gy }}" stroke="currentColor" stroke-opacity="0.08" stroke-width="0.5"/>
+                {% set label_val = (y_max * (4 - i) / 4)|round|int %}
+                <text x="{{ pad_l - 4 }}" y="{{ gy + 3 }}" text-anchor="end" class="fill-gray-400 dark:fill-gray-500" style="font-size:8px;">{{ label_val }}</text>
+                {% endfor %}
+
+                {# Ideal pace line (dashed) — straight from remaining_total down to 0 #}
+                <line x1="{{ pad_l }}" y1="{{ pad_t }}"
+                      x2="{{ pad_l + plot_w }}" y2="{{ pad_t + plot_h }}"
+                      stroke="#d97706" stroke-width="1.5" stroke-dasharray="6,3" stroke-opacity="0.6"/>
+
+                {# Actual remaining line (stepped) #}
+                {% set actual_points = [] %}
+                {% set running_remaining = [remaining_total] %}
+                {% for m in monthly_chart %}
+                    {% set x = pad_l + loop.index0 / (n - 1) * plot_w if n > 1 else pad_l %}
+                    {% set y = pad_t + (1 - running_remaining[0] / y_max) * plot_h %}
+                    {% set _d = actual_points.append((x|round(1), y|round(1))) %}
+                    {% if m.is_past or m.is_current %}
+                        {% set _d = running_remaining.pop() %}{% set _d = running_remaining.append(running_remaining[0] if running_remaining else remaining_total - m.used) %}
+                        {# Recalculate: subtract used from running total after plotting the point #}
+                    {% endif %}
+                {% endfor %}
+
+                {# Recompute properly: we need cumulative subtraction #}
+                {% set pts = [] %}
+                {% set rem = [remaining_total] %}
+                {% for m in monthly_chart %}
+                    {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                    {% set y = pad_t + (1 - rem[0] / y_max) * plot_h %}
+                    {% set _d = pts.append('{},{}'.format(x|round(1), y|round(1))) %}
+                    {% if m.is_past or m.is_current %}
+                        {% set new_rem = rem[0] - m.used %}
+                        {% set _d = rem.pop() %}{% set _d = rem.append(new_rem) %}
+                    {% endif %}
+                {% endfor %}
+
+                {# Find where current month is for the "now" marker #}
+                {% set now_idx = [] %}
+                {% for m in monthly_chart %}{% if m.is_current %}{% set _d = now_idx.append(loop.index0) %}{% endif %}{% endfor %}
+
+                {# Solid line for past+current, lighter for future (projected at same level) #}
+                {% set past_pts = [] %}
+                {% set future_pts = [] %}
+                {% set rem2 = [remaining_total] %}
+                {% for m in monthly_chart %}
+                    {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                    {% set y = pad_t + (1 - rem2[0] / y_max) * plot_h %}
+                    {% if m.is_past or m.is_current %}
+                        {% set _d = past_pts.append('{},{}'.format(x|round(1), y|round(1))) %}
+                        {% if m.is_current %}{% set _d = future_pts.append('{},{}'.format(x|round(1), y|round(1))) %}{% endif %}
+                        {% set new_rem = rem2[0] - m.used %}
+                        {% set _d = rem2.pop() %}{% set _d = rem2.append(new_rem) %}
+                    {% else %}
+                        {# Future: subtract suggested_per_month each month as projected #}
+                        {% set _d = future_pts.append('{},{}'.format(x|round(1), y|round(1))) %}
+                        {% set new_rem = rem2[0] - suggested_per_month %}
+                        {% set _d = rem2.pop() %}{% set _d = rem2.append(new_rem if new_rem > 0 else 0) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if past_pts|length > 1 %}
+                <polyline points="{{ past_pts|join(' ') }}" fill="none" stroke="#db3d7f" stroke-width="2.5" stroke-linejoin="round"/>
+                {% endif %}
+                {% if future_pts|length > 1 %}
+                <polyline points="{{ future_pts|join(' ') }}" fill="none" stroke="#db3d7f" stroke-width="1.5" stroke-dasharray="4,3" stroke-opacity="0.5" stroke-linejoin="round"/>
+                {% endif %}
+
+                {# Dots on past points #}
+                {% set rem3 = [remaining_total] %}
+                {% for m in monthly_chart %}
+                    {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                    {% set y = pad_t + (1 - rem3[0] / y_max) * plot_h %}
+                    {% if m.is_past or m.is_current %}
+                    <circle cx="{{ x|round(1) }}" cy="{{ y|round(1) }}" r="3" fill="#db3d7f"/>
+                        {% set new_rem = rem3[0] - m.used %}
+                        {% set _d = rem3.pop() %}{% set _d = rem3.append(new_rem) %}
+                    {% endif %}
+                {% endfor %}
+
+                {# "Now" vertical marker #}
+                {% if now_idx %}
+                {% set nx = pad_l + now_idx[0] / ((n - 1) if n > 1 else 1) * plot_w %}
+                <line x1="{{ nx|round(1) }}" y1="{{ pad_t }}" x2="{{ nx|round(1) }}" y2="{{ pad_t + plot_h }}" stroke="#c8102e" stroke-width="1" stroke-dasharray="3,2" stroke-opacity="0.5"/>
+                <text x="{{ nx|round(1) }}" y="{{ pad_t + plot_h + 22 }}" text-anchor="middle" class="fill-borsen-red" style="font-size:8px;font-weight:600;">{{ _('now') }}</text>
+                {% endif %}
+
+                {# Month labels #}
+                {% for m in monthly_chart %}
+                {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                <text x="{{ x|round(1) }}" y="{{ pad_t + plot_h + 12 }}" text-anchor="middle" class="fill-gray-400 dark:fill-gray-500" style="font-size:8px;">{{ m.label }}</text>
+                {% endfor %}
+            </svg>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-400 dark:text-gray-500">
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block w-5 h-0 border-t-2 border-borsen-pink"></span> {{ _('Actual remaining') }}
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block w-5 h-0 border-t-2 border-borsen-pink border-dashed opacity-50"></span> {{ _('Projected (at burn rate)') }}
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block w-5 h-0 border-t-2 border-amber-500 border-dashed opacity-60"></span> {{ _('Ideal even pace') }}
+                </span>
+            </div>
+        </div>
+    </section>
+
+    {# ------------------------------------------------------------------ #}
+    {# OPTION C — Progress bar + text nudge                               #}
+    {# ------------------------------------------------------------------ #}
+    <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
+        <h2 class="text-lg font-semibold mb-1">{{ _('Option C: Progress Bar + Nudge') }}</h2>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">{{ _('Minimal — just a progress bar and the key number.') }}</p>
+
+        {% set pct_used = (period_summary.used / entitlement * 100)|round|int if entitlement > 0 else 0 %}
+        {% set pct_time = ((12 - period_summary.months_left) / 12 * 100)|round|int %}
+
+        <div class="max-w-lg space-y-4">
+            {# Main progress bar #}
+            <div>
+                <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    <span>{{ period_summary.used|round(1) }} {{ _('days used') }}</span>
+                    <span>{{ period_summary.remaining|round(1) }} {{ _('days remaining') }}</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-5 relative overflow-hidden">
+                    {# Used portion #}
+                    <div class="h-full bg-borsen-pink rounded-full transition-all" style="width: {{ pct_used }}%;"></div>
+                    {# Time marker — where you "should" be #}
+                    <div class="absolute top-0 bottom-0 w-0.5 bg-gray-900 dark:bg-white opacity-40" style="left: {{ pct_time }}%;"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                    <span>0</span>
+                    <span style="margin-left: {{ pct_time - 3 }}%;">{{ _('Time elapsed') }} ({{ pct_time }}%)</span>
+                    <span>{{ entitlement }}</span>
+                </div>
+            </div>
+
+            {# Nudge text #}
+            <div class="bg-borsen-cream dark:bg-gray-700/50 rounded-lg p-4 text-center">
+                {% if suggested_per_month > 0 %}
+                <div class="text-3xl font-bold text-borsen-pink">{{ suggested_per_month }}</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ _('days per month to stay on track') }}</div>
+                <div class="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                    {{ period_summary.remaining|round(1) }} {{ _('days') }} &divide; {{ period_summary.months_left }} {{ _('months') }} = {{ suggested_per_month }} {{ _('days/month') }}
+                </div>
+                {% else %}
+                <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ _('All caught up!') }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    {# ------------------------------------------------------------------ #}
+    {# OPTION D — Split bars (past vs future, separate)                   #}
+    {# ------------------------------------------------------------------ #}
+    <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
+        <h2 class="text-lg font-semibold mb-1">{{ _('Option D: Split View') }}</h2>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">{{ _('Past usage and future target displayed separately — no stacking.') }}</p>
+
+        {% set past_months = monthly_chart|selectattr('is_past')|list + monthly_chart|selectattr('is_current')|list %}
+        {% set future_months = monthly_chart|selectattr('is_future')|list %}
+
+        {# Find max across both for consistent scale #}
+        {% set split_max = [suggested_per_month if suggested_per_month > 0 else 1] %}
+        {% for m in monthly_chart %}
+            {% if m.used > split_max[0] %}{% set _x = split_max.pop() %}{% set _x = split_max.append(m.used) %}{% endif %}
+        {% endfor %}
+        {% set smax = split_max[0] if split_max[0] > 0 else 1 %}
+
+        <div class="max-w-lg">
+            <div class="grid grid-cols-2 gap-6">
+                {# Left: What happened #}
+                <div>
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{{ _('What happened') }}</h3>
+                    {% if past_months %}
+                    <div class="flex items-end gap-1" style="height: 100px;">
+                        {% for m in past_months %}
+                        {% set bar_px = m.used / smax * 100 %}
+                        <div class="flex-1 flex flex-col items-center h-full justify-end">
+                            <div class="w-full relative" style="height: {{ bar_px|round }}%;">
+                                {% if m.used > 0 and bar_px > 30 %}
+                                <span class="absolute inset-x-0 top-0.5 text-center text-[10px] font-semibold" style="color: var(--ink);">{{ m.used|round|int }}</span>
+                                {% endif %}
+                                <div class="w-full h-full rounded-t bg-borsen-pink"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="flex gap-1 mt-1">
+                        {% for m in past_months %}
+                        <div class="flex-1 text-center text-[10px] text-gray-400 dark:text-gray-500">{{ m.label }}</div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-xs text-gray-400 dark:text-gray-500 italic" style="height: 100px; display: flex; align-items: center; justify-content: center;">{{ _('No data yet') }}</div>
+                    {% endif %}
+                </div>
+
+                {# Right: What's needed #}
+                <div>
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{{ _("What's needed") }}</h3>
+                    {% if future_months and suggested_per_month > 0 %}
+                    <div class="flex items-end gap-1" style="height: 100px;">
+                        {% for m in future_months %}
+                        {% set planned = m.used %}
+                        {% set target = suggested_per_month %}
+                        {% set bar_total = target if target > planned else planned %}
+                        {% set bar_px = bar_total / smax * 100 %}
+                        <div class="flex-1 flex flex-col items-center h-full justify-end">
+                            <div class="w-full relative" style="height: {{ bar_px|round }}%;">
+                                {% if bar_px > 30 %}
+                                <span class="absolute inset-x-0 top-0.5 text-center text-[10px] font-semibold" style="color: var(--ink);">{{ target|round(1) }}</span>
+                                {% endif %}
+                                {# Planned portion at bottom if any #}
+                                {% if planned > 0 %}
+                                <div class="w-full absolute bottom-0 bg-borsen-pink rounded-t" style="height: {{ (planned / bar_total * 100)|round }}%;"></div>
+                                {% endif %}
+                                <div class="w-full h-full rounded-t bg-amber-200 dark:bg-amber-700 border-2 border-dashed border-amber-400 dark:border-amber-500"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="flex gap-1 mt-1">
+                        {% for m in future_months %}
+                        <div class="flex-1 text-center text-[10px] text-gray-400 dark:text-gray-500">{{ m.label }}</div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-xs text-gray-400 dark:text-gray-500 italic" style="height: 100px; display: flex; align-items: center; justify-content: center;">{{ _('No remaining days') }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs text-gray-400 dark:text-gray-500">
+                <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-2 rounded bg-borsen-pink"></span> {{ _('Actual days taken') }}</span>
+                <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-2 rounded bg-amber-200 dark:bg-amber-700 border border-dashed border-amber-400"></span> {{ _('Monthly target') }} ({{ suggested_per_month }}/{{ _('mo') }})</span>
+            </div>
+        </div>
+    </section>
+
+    {# ------------------------------------------------------------------ #}
+    {# OPTION E — Pace tracker table                                      #}
+    {# ------------------------------------------------------------------ #}
+    <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
+        <h2 class="text-lg font-semibold mb-1">{{ _('Option E: Pace Tracker') }}</h2>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">{{ _('A simple month-by-month overview with status indicators.') }}</p>
+
+        <div class="max-w-lg">
+            {# Cumulative ideal: entitlement / 12 per month #}
+            {% set ideal_per_month = (entitlement / 12)|round(1) if entitlement > 0 else 0 %}
+
+            <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 dark:text-gray-400">
+                            <th class="text-left py-2 px-3 font-medium">{{ _('Month') }}</th>
+                            <th class="text-right py-2 px-3 font-medium">{{ _('Days taken') }}</th>
+                            <th class="text-right py-2 px-3 font-medium">{{ _('Target') }}</th>
+                            <th class="text-center py-2 px-3 font-medium">{{ _('Status') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set cumulative_target = [0] %}
+                        {% set cumulative_actual = [0] %}
+                        {% for m in monthly_chart %}
+                        {% set new_target = cumulative_target[0] + ideal_per_month %}
+                        {% set _d = cumulative_target.pop() %}{% set _d = cumulative_target.append(new_target) %}
+                        {% set new_actual = cumulative_actual[0] + m.used %}
+                        {% set _d = cumulative_actual.pop() %}{% set _d = cumulative_actual.append(new_actual) %}
+                        {% set diff = new_actual - new_target %}
+                        <tr class="border-t border-gray-100 dark:border-gray-700/50 {{ 'bg-borsen-cream/30 dark:bg-gray-700/20' if m.is_current else '' }}">
+                            <td class="py-2 px-3 {{ 'font-semibold' if m.is_current else '' }}">
+                                {{ m.label }} {{ m.year }}
+                                {% if m.is_current %}<span class="text-[10px] text-borsen-red font-normal ml-1">&larr; {{ _('now') }}</span>{% endif %}
+                            </td>
+                            <td class="py-2 px-3 text-right">
+                                {% if m.is_past or m.is_current %}
+                                    {{ m.used|round|int }}
+                                {% else %}
+                                    <span class="text-gray-300 dark:text-gray-600">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-3 text-right text-gray-400 dark:text-gray-500">{{ ideal_per_month|round(1) }}</td>
+                            <td class="py-2 px-3 text-center">
+                                {% if m.is_past or m.is_current %}
+                                    {% if diff >= -0.5 and diff <= 0.5 %}
+                                    <span class="inline-block w-2 h-2 rounded-full bg-green-500" title="{{ _('On pace') }}"></span>
+                                    {% elif diff > 0.5 %}
+                                    <span class="inline-block w-2 h-2 rounded-full bg-green-500" title="{{ _('Ahead') }}"></span>
+                                    {% else %}
+                                    <span class="inline-block w-2 h-2 rounded-full bg-amber-400" title="{{ _('Behind') }}"></span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="inline-block w-2 h-2 rounded-full bg-gray-200 dark:bg-gray-600"></span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs text-gray-400 dark:text-gray-500">
+                <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-green-500"></span> {{ _('On pace or ahead') }}</span>
+                <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span> {{ _('Behind pace') }}</span>
+                <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-gray-200 dark:bg-gray-600"></span> {{ _('Future') }}</span>
+            </div>
+            <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
+                {{ _('Target is based on even distribution:') }} {{ entitlement }} {{ _('days') }} &divide; 12 {{ _('months') }} = {{ ideal_per_month }} {{ _('days/month') }}
+            </p>
+        </div>
+    </section>
+
+    {# ------------------------------------------------------------------ #}
+    {# OPTION F — Accrual balance chart (earned - used = balance)          #}
+    {# ------------------------------------------------------------------ #}
+    <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
+        <h2 class="text-lg font-semibold mb-1">{{ _('Option F: Holiday Balance') }}</h2>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">{{ _('Shows your holiday balance building up month by month. The line rises as days are earned and drops when vacation is taken.') }}</p>
+
+        {% set n = monthly_chart|length %}
+        {% set svg_w = 520 %}
+        {% set svg_h = 200 %}
+        {% set pad_l = 32 %}
+        {% set pad_r = 12 %}
+        {% set pad_t = 20 %}
+        {% set pad_b = 32 %}
+        {% set plot_w = svg_w - pad_l - pad_r %}
+        {% set plot_h = svg_h - pad_t - pad_b %}
+
+        {# Find y-axis max: entitlement + 2 so the plateau is clearly visible #}
+        {% set y_max = (entitlement + 2) if entitlement > 0 else 1 %}
+
+        {# Build coordinate lists #}
+        {% set accrual_pts = [] %}
+        {% set balance_pts = [] %}
+        {% set balance_future_pts = [] %}
+        {% set cum_used_at_now = [0] %}
+        {% set extra_future = [0] %}
+        {% for m in monthly_chart %}
+            {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+            {% set y_acc = pad_t + (1 - m.accrued / y_max) * plot_h %}
+            {% set y_acc = [y_acc, pad_t]|max %}
+            {% set _d = accrual_pts.append('{},{}'.format(x|round(1), y_acc|round(1))) %}
+            {% if m.is_past or m.is_current %}
+                {% set y_bal = pad_t + (1 - m.balance / y_max) * plot_h %}
+                {% set y_bal = [[y_bal, pad_t]|max, pad_t + plot_h]|min %}
+                {% set _d = balance_pts.append('{},{}'.format(x|round(1), y_bal|round(1))) %}
+                {% set _d = cum_used_at_now.pop() %}{% set _d = cum_used_at_now.append(m.accrued - m.balance) %}
+                {% if m.is_current %}
+                    {% set _d = balance_future_pts.append('{},{}'.format(x|round(1), y_bal|round(1))) %}
+                {% endif %}
+            {% else %}
+                {# Future: balance = m.accrued (capped at entitlement) - past used - future planned #}
+                {% set new_extra = extra_future[0] + m.used %}
+                {% set _d = extra_future.pop() %}{% set _d = extra_future.append(new_extra) %}
+                {% set proj = m.accrued - cum_used_at_now[0] - new_extra %}
+                {% set y_proj = pad_t + (1 - proj / y_max) * plot_h %}
+                {% set y_proj = [[y_proj, pad_t]|max, pad_t + plot_h]|min %}
+                {% set _d = balance_future_pts.append('{},{}'.format(x|round(1), y_proj|round(1))) %}
+            {% endif %}
+        {% endfor %}
+
+        {# Find current month index #}
+        {% set now_idx = [] %}
+        {% for m in monthly_chart %}{% if m.is_current %}{% set _d = now_idx.append(loop.index0) %}{% endif %}{% endfor %}
+
+        <div class="max-w-xl">
+            <svg viewBox="0 0 {{ svg_w }} {{ svg_h }}" class="w-full" style="max-height: 240px;">
+                {# Horizontal grid lines #}
+                {% set grid_steps = 5 %}
+                {% for i in range(grid_steps + 1) %}
+                    {% set gy = pad_t + plot_h * i / grid_steps %}
+                    <line x1="{{ pad_l }}" y1="{{ gy|round(1) }}" x2="{{ svg_w - pad_r }}" y2="{{ gy|round(1) }}" stroke="currentColor" stroke-opacity="0.07" stroke-width="0.5"/>
+                    {% set label_val = (y_max * (grid_steps - i) / grid_steps)|round|int %}
+                    <text x="{{ pad_l - 5 }}" y="{{ gy|round(1) + 3 }}" text-anchor="end" class="fill-gray-400 dark:fill-gray-500" style="font-size:8px;">{{ label_val }}</text>
+                {% endfor %}
+
+                {# Shaded area under the balance line (past only) — gives weight to the balance #}
+                {% if balance_pts|length > 1 %}
+                {% set first_x = balance_pts[0].split(',')[0] %}
+                {% set last_x = balance_pts[-1].split(',')[0] %}
+                <polygon points="{{ balance_pts|join(' ') }} {{ last_x }},{{ (pad_t + plot_h)|round(1) }} {{ first_x }},{{ (pad_t + plot_h)|round(1) }}"
+                         fill="#db3d7f" fill-opacity="0.10"/>
+                {% endif %}
+
+                {# Accrual line (dashed, light — the "if you took no holiday" ceiling) #}
+                {% if accrual_pts|length > 1 %}
+                <polyline points="{{ accrual_pts|join(' ') }}" fill="none" stroke="#d97706" stroke-width="1.5" stroke-dasharray="6,3" stroke-opacity="0.45"/>
+                {% endif %}
+
+                {# Balance line — solid for past, dashed for future projection #}
+                {% if balance_pts|length > 1 %}
+                <polyline points="{{ balance_pts|join(' ') }}" fill="none" stroke="#db3d7f" stroke-width="2.5" stroke-linejoin="round"/>
+                {% endif %}
+                {% if balance_future_pts|length > 1 %}
+                <polyline points="{{ balance_future_pts|join(' ') }}" fill="none" stroke="#db3d7f" stroke-width="1.5" stroke-dasharray="4,3" stroke-opacity="0.5" stroke-linejoin="round"/>
+                {% endif %}
+
+                {# Dots on past/current balance points + value labels #}
+                {% for m in monthly_chart %}
+                    {% if m.is_past or m.is_current %}
+                    {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                    {% set y_bal = pad_t + (1 - m.balance / y_max) * plot_h %}
+                    {% set y_bal = y_bal if y_bal >= pad_t else pad_t %}
+                    {% set y_bal = y_bal if y_bal <= pad_t + plot_h else pad_t + plot_h %}
+                    <circle cx="{{ x|round(1) }}" cy="{{ y_bal|round(1) }}" r="3.5" fill="#db3d7f"/>
+                    <text x="{{ x|round(1) }}" y="{{ y_bal|round(1) - 7 }}" text-anchor="middle" class="fill-gray-600 dark:fill-gray-300" style="font-size:9px;font-weight:600;">{{ m.balance|round(1) }}</text>
+                    {% endif %}
+                {% endfor %}
+
+                {# "Now" vertical marker #}
+                {% if now_idx %}
+                {% set nx = pad_l + now_idx[0] / ((n - 1) if n > 1 else 1) * plot_w %}
+                <line x1="{{ nx|round(1) }}" y1="{{ pad_t }}" x2="{{ nx|round(1) }}" y2="{{ pad_t + plot_h }}" stroke="#c8102e" stroke-width="1" stroke-dasharray="3,2" stroke-opacity="0.4"/>
+                {% endif %}
+
+                {# Month labels on x-axis #}
+                {% for m in monthly_chart %}
+                {% set x = pad_l + loop.index0 / ((n - 1) if n > 1 else 1) * plot_w %}
+                <text x="{{ x|round(1) }}" y="{{ pad_t + plot_h + 14 }}" text-anchor="middle" class="fill-gray-400 dark:fill-gray-500" style="font-size:8px;">{{ m.label }}</text>
+                {% if m.is_current %}
+                <text x="{{ x|round(1) }}" y="{{ pad_t + plot_h + 24 }}" text-anchor="middle" class="fill-borsen-red" style="font-size:7px;font-weight:600;">{{ _('now') }}</text>
+                {% endif %}
+                {% endfor %}
+
+                {# Y-axis label #}
+                <text x="{{ pad_l - 2 }}" y="{{ pad_t - 8 }}" text-anchor="start" class="fill-gray-400 dark:fill-gray-500" style="font-size:7px;">{{ _('days') }}</text>
+            </svg>
+
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-400 dark:text-gray-500">
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block w-5 h-0 border-t-2 border-borsen-pink"></span> {{ _('Holiday balance') }}
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block w-5 h-0 border-t-2 border-borsen-pink border-dashed opacity-50"></span> {{ _('Projected balance') }}
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block w-5 h-0 border-t-2 border-amber-500 border-dashed opacity-50"></span> {{ _('Accrued (if no holiday taken)') }}
+                </span>
+            </div>
+            <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
+                {{ _('Balance = days earned so far minus days taken. The gap between the lines shows how much holiday you have used.') }}
+            </p>
+        </div>
+    </section>
+
+</div>
+{% endblock %}

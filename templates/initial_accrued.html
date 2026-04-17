@@ -3,10 +3,10 @@
 
 {% block content %}
 <div class="min-h-screen flex items-center justify-center -mt-6">
-    <div class="w-full max-w-lg">
+    <div class="w-full max-w-md">
         <h1 class="text-2xl font-bold text-center mb-2">{{ _('Welcome!') }}</h1>
         <p class="text-center text-gray-500 dark:text-gray-400 mb-6">
-            {{ _("Let's set up your holiday balance for") }} {{ period_label or _('the current period') }}
+            {{ _("Let's set up your holiday balance") }}
         </p>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -24,68 +24,52 @@
         {% endwith %}
 
         <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-            <form method="post" class="space-y-5" id="setup-form">
-
-                <!-- Step 1: Started this period? -->
-                <div>
-                    <label class="block text-sm font-medium mb-3">
-                        {{ _('Did you start at Børsen during this holiday period?') }}
-                    </label>
-                    <div class="flex gap-3">
-                        <button type="button" id="btn-no" onclick="setStartedThisPeriod(false)"
-                                class="flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors
-                                       border-borsen-red bg-borsen-red text-white">
-                            {{ _('No, I started before') }}
-                        </button>
-                        <button type="button" id="btn-yes" onclick="setStartedThisPeriod(true)"
-                                class="flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors
-                                       border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400">
-                            {{ _('Yes, I started this period') }}
-                        </button>
-                    </div>
-                    <input type="hidden" name="started_this_period" id="started_this_period" value="no">
-                </div>
-
-                <!-- Step 1b: Start date (conditional) -->
-                <div id="start-date-section" class="hidden">
-                    <label class="block text-sm font-medium mb-2">{{ _('When did you start?') }}</label>
-                    <input type="date" name="start_date" id="start_date"
-                           {% if period_start %}min="{{ period_start.isoformat() }}"{% endif %}
-                           {% if period_end %}max="{{ period_end.isoformat() }}"{% endif %}
-                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-borsen-red focus:border-transparent text-lg">
-                </div>
-
-                <!-- Step 2: Days used -->
+            <form method="post" class="space-y-5">
+                {% if earning_start %}
                 <div>
                     <label class="block text-sm font-medium mb-2">
-                        {{ _('How many holiday days have you already taken this period?') }}
+                        {{ _('When did you start working at Børsen?') }}
+                    </label>
+                    <div class="space-y-2">
+                        <label class="flex items-start gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <input type="radio" name="started_status" value="before" checked
+                                   class="mt-0.5 text-borsen-red focus:ring-borsen-red"
+                                   onchange="document.getElementById('start-date-wrap').classList.add('hidden')">
+                            <span class="text-sm">
+                                {{ _('Before {}').format(earning_start|fmtdate) }}
+                            </span>
+                        </label>
+                        <label class="flex items-start gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <input type="radio" name="started_status" value="after"
+                                   class="mt-0.5 text-borsen-red focus:ring-borsen-red"
+                                   onchange="document.getElementById('start-date-wrap').classList.remove('hidden')">
+                            <span class="text-sm">
+                                {{ _('On or after {}').format(earning_start|fmtdate) }}
+                            </span>
+                        </label>
+                    </div>
+                    <div id="start-date-wrap" class="hidden mt-3">
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                            {{ _('Your start date') }}
+                        </label>
+                        <input type="date" name="start_date"
+                               min="{{ earning_start.isoformat() }}"
+                               max="{{ earning_end.isoformat() }}"
+                               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-borsen-red focus:border-transparent">
+                    </div>
+                </div>
+                {% endif %}
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">
+                        {{ _('How many holiday days do you have available right now?') }}
                     </label>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                        {{ _("Count the working days you've been off since the holiday period started.") }}
-                        {{ _('You can adjust the number so the remaining days match what it says on your payslip.') }}
+                        {{ _('Enter the number from the bottom right of your payslip.') }}
                     </p>
-                    <input type="number" name="days_used" id="days_used" min="0" max="365" step="1"
-                           placeholder="0" autofocus
-                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-borsen-red focus:border-transparent text-lg">
-                </div>
-
-                <!-- Live preview -->
-                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 bg-borsen-cream dark:bg-gray-700/50">
-                    <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3">{{ _('Preview') }}</h3>
-                    <div class="grid grid-cols-2 gap-3 text-center">
-                        <div>
-                            <div class="text-xl font-bold text-borsen-red dark:text-red-400" id="preview-used">0</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ _('Days used') }}</div>
-                        </div>
-                        <div>
-                            <div class="text-xl font-bold text-green-600 dark:text-green-400" id="preview-remaining">{{ days_off }}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ _('Remaining') }}</div>
-                        </div>
-                    </div>
-                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-3 text-center">
-                        {{ _('Adjust until') }} <strong>{{ _('Remaining') }}</strong> {{ _('matches your payslip.') }}
-                        {{ _('Your entitlement is') }} <strong id="preview-entitlement">{{ days_off }}</strong> {{ _('days.') }}
-                    </p>
+                    <input type="number" name="days_available" min="0" max="365" step="0.1"
+                           placeholder="0" autofocus required
+                           class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-borsen-red focus:border-transparent text-2xl text-center">
                 </div>
 
                 <button type="submit"
@@ -96,65 +80,4 @@
         </div>
     </div>
 </div>
-
-<script>
-(function() {
-    var baseDaysOff = {{ days_off }};
-    var periodStartStr = '{{ period_start.isoformat() if period_start else '' }}';
-    var periodEndStr = '{{ period_end.isoformat() if period_end else '' }}';
-    var usedEl = document.getElementById('days_used');
-    var startDateEl = document.getElementById('start_date');
-    var previewUsed = document.getElementById('preview-used');
-    var previewRemaining = document.getElementById('preview-remaining');
-    var previewEntitlement = document.getElementById('preview-entitlement');
-    var startedThisPeriod = false;
-
-    function monthsBetween(from, to) {
-        return (to.getFullYear() - from.getFullYear()) * 12 + to.getMonth() - from.getMonth();
-    }
-
-    function getEntitlement() {
-        if (!startedThisPeriod || !startDateEl.value || !periodEndStr) return baseDaysOff;
-        var start = new Date(startDateEl.value);
-        var end = new Date(periodEndStr);
-        var months = monthsBetween(start, end) + 1;
-        if (months < 1) months = 1;
-        return Math.round(baseDaysOff / 12 * months * 10) / 10;
-    }
-
-    function update() {
-        var entitlement = getEntitlement();
-        var used = parseInt(usedEl.value) || 0;
-        var remaining = entitlement - used;
-        previewUsed.textContent = used;
-        previewEntitlement.textContent = entitlement;
-        previewRemaining.textContent = Math.round(remaining * 10) / 10;
-        previewRemaining.classList.toggle('text-red-600', remaining < 0);
-        previewRemaining.classList.toggle('dark:text-red-400', remaining < 0);
-        previewRemaining.classList.toggle('text-green-600', remaining >= 0);
-        previewRemaining.classList.toggle('dark:text-green-400', remaining >= 0);
-    }
-
-    window.setStartedThisPeriod = function(yes) {
-        startedThisPeriod = yes;
-        document.getElementById('started_this_period').value = yes ? 'yes' : 'no';
-        document.getElementById('start-date-section').classList.toggle('hidden', !yes);
-        var btnYes = document.getElementById('btn-yes');
-        var btnNo = document.getElementById('btn-no');
-        if (yes) {
-            btnYes.className = 'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors border-borsen-red bg-borsen-red text-white';
-            btnNo.className = 'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400';
-        } else {
-            btnNo.className = 'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors border-borsen-red bg-borsen-red text-white';
-            btnYes.className = 'flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400';
-        }
-        if (!yes) startDateEl.value = '';
-        update();
-    };
-
-    usedEl.addEventListener('input', update);
-    startDateEl.addEventListener('change', update);
-    update();
-})();
-</script>
 {% endblock %}
