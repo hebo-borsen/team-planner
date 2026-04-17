@@ -2,9 +2,9 @@
 <table class="w-full text-sm">
     <thead>
         <tr class="border-b border-gray-200 dark:border-gray-700">
-            <th class="text-left py-2 font-medium">Date</th>
-            <th class="text-left py-2 font-medium">Name</th>
-            <th class="text-right py-2 font-medium">Action</th>
+            <th class="text-left py-2 font-medium">{{ _('Date') }}</th>
+            <th class="text-left py-2 font-medium">{{ _('Name') }}</th>
+            <th class="text-right py-2 font-medium">{{ _('Action') }}</th>
         </tr>
     </thead>
     <tbody>
@@ -16,9 +16,9 @@
                 <button hx-delete="/holidays/{{ hid }}"
                         hx-target="#holiday-list"
                         hx-swap="innerHTML"
-                        hx-confirm="Delete this holiday?"
+                        hx-confirm="{{ _('Delete this holiday?') }}"
                         class="text-red-600 dark:text-red-400 hover:underline text-xs">
-                    Delete
+                    {{ _('Delete') }}
                 </button>
             </td>
         </tr>
@@ -26,5 +26,5 @@
     </tbody>
 </table>
 {% else %}
-<p class="text-sm text-gray-500 dark:text-gray-400">No holidays added yet.</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">{{ _('No holidays added yet.') }}</p>
 {% endif %}

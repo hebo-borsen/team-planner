@@ -12,6 +12,7 @@ from openpyxl import Workbook
 
 import db
 import danish_holidays
+from i18n import _, get_locale
 from migrate import run_migrations
 
 # ---------------------------------------------------------------------------
@@ -24,6 +25,9 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 run_migrations()
 db.ensure_periods_exist()
+
+app.jinja_env.globals['_'] = _
+app.jinja_env.globals['get_locale'] = get_locale
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +53,11 @@ def format_datetime(value):
 # ---------------------------------------------------------------------------
 # Error handlers
 # ---------------------------------------------------------------------------
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('404.html'), 404
+
 
 @app.errorhandler(500)
 def internal_error(e):
@@ -109,7 +118,7 @@ def admin_required(f):
     @login_required
     def decorated(*args, **kwargs):
         if session.get('role') != 'admin':
-            flash('Permission denied.', 'error')
+            flash(_('Permission denied.'), 'error')
             return redirect(url_for('calendar_redirect'))
         return f(*args, **kwargs)
     return decorated
@@ -124,7 +133,7 @@ def inject_globals():
     current_dept_id = session.get('viewing_department_id') or user_dept_id
     current_dept_name = None
     is_fun_dept = False
-    for did, dname, _, dfun in all_departments:
+    for did, dname, _dsort, dfun in all_departments:
         if did == current_dept_id:
             current_dept_name = dname
         if did == user_dept_id:
@@ -164,7 +173,7 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         if not username or not password:
-            flash('Please fill in all fields.', 'error')
+            flash(_('Please fill in all fields.'), 'error')
             return redirect(url_for('login'))
         user = db.authenticate_user(username, password)
         if user:
@@ -182,7 +191,7 @@ def login():
             resp = redirect(url_for('calendar_redirect'))
             resp.set_cookie('session_token', token, max_age=2592000, httponly=True, samesite='Lax')
             return resp
-        flash('Invalid username or password.', 'error')
+        flash(_('Invalid username or password.'), 'error')
         return redirect(url_for('login'))
     return render_template('login.html')
 
@@ -198,19 +207,19 @@ def register():
         confirm = request.form.get('confirm', '')
         department_id = request.form.get('department_id', type=int) or None
         if not shortname or not display_name or not password or not confirm:
-            flash('Please fill in all fields.', 'error')
+            flash(_('Please fill in all fields.'), 'error')
             return redirect(url_for('register'))
         if password != confirm:
-            flash('Passwords do not match.', 'error')
+            flash(_('Passwords do not match.'), 'error')
             return redirect(url_for('register'))
         if len(password) < 4:
-            flash('Password must be at least 4 characters.', 'error')
+            flash(_('Password must be at least 4 characters.'), 'error')
             return redirect(url_for('register'))
         success, msg = db.register_user(shortname, password, display_name=display_name, email=email, font=font, department_id=department_id)
         if success:
-            flash(msg, 'success')
+            flash(_(msg), 'success')
             return redirect(url_for('login'))
-        flash(msg, 'error')
+        flash(_(msg), 'error')
         return redirect(url_for('register'))
     departments = db.get_all_departments()
     return render_template('register.html', departments=departments)
@@ -235,15 +244,15 @@ def force_password():
         new_pw = request.form.get('new_password', '')
         confirm = request.form.get('confirm_password', '')
         if not new_pw:
-            flash('Password cannot be empty.', 'error')
+            flash(_('Password cannot be empty.'), 'error')
         elif new_pw != confirm:
-            flash('Passwords do not match.', 'error')
+            flash(_('Passwords do not match.'), 'error')
         elif len(new_pw) < 4:
-            flash('Password must be at least 4 characters.', 'error')
+            flash(_('Password must be at least 4 characters.'), 'error')
         else:
             db.update_password(session['user_id'], new_pw)
             session['must_change_password'] = False
-            flash('Password updated!', 'success')
+            flash(_('Password updated!'), 'success')
             return redirect(url_for('calendar_redirect'))
         return redirect(url_for('force_password'))
     return render_template('force_password.html')
@@ -260,8 +269,7 @@ def initial_accrued():
     period_end = None
     earning_start = None
     earning_end = None
-    period_label = None
-    days_off = 34
+    base_days = 34
     if period_id:
         for pid, plabel, pstart, pend, estart, eend in db.get_holiday_periods():
             if pid == period_id:
@@ -269,34 +277,59 @@ def initial_accrued():
                 period_end = pend
                 earning_start = estart or pstart
                 earning_end = eend or pend
-                period_label = plabel
-                days_off = db.get_vacation_summary(
-                    session['user_id'], pstart, pend,
-                    earning_start=earning_start, earning_end=earning_end)['days_off_per_year']
                 break
+        conn = db.get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT days_off_per_year FROM users WHERE id = %s", (session['user_id'],))
+        row = cur.fetchone()
+        if row and row[0] is not None:
+            base_days = float(row[0])
+        cur.close()
+        conn.close()
 
     if request.method == 'POST':
-        raw_used = request.form.get('days_used', '').strip()
-        started_this_period = request.form.get('started_this_period') == 'yes'
-        start_date_str = request.form.get('start_date', '').strip()
+        raw = request.form.get('days_available', '').strip()
         try:
-            days_used = int(raw_used) if raw_used else 0
-            if days_used < 0:
+            days_available = float(raw) if raw else 0
+            if days_available < 0:
                 raise ValueError
         except (ValueError, TypeError):
-            flash('Please enter a valid number (0 or more).', 'error')
+            flash(_('Please enter a valid number (0 or more).'), 'error')
             return redirect(url_for('initial_accrued'))
-        user_start = None
-        if started_this_period and start_date_str:
-            user_start = date.fromisoformat(start_date_str)
-        db.set_initial_accrued(session['user_id'], days_used, period_start,
-                               start_date=user_start)
+
+        # Parse start status. "after" means user joined within the current
+        # earning period and an exact date is required.
+        started_status = request.form.get('started_status', 'before')
+        effective_start = None
+        if started_status == 'after':
+            raw_date = request.form.get('start_date', '').strip()
+            try:
+                parsed = datetime.strptime(raw_date, '%Y-%m-%d').date()
+            except ValueError:
+                flash(_('Please enter a valid start date.'), 'error')
+                return redirect(url_for('initial_accrued'))
+            if earning_start and earning_end and not (earning_start <= parsed <= earning_end):
+                flash(_('Start date must be within the current earning period.'), 'error')
+                return redirect(url_for('initial_accrued'))
+            effective_start = parsed
+
+        # Recompute accrued using the chosen start date so days_used is correct.
+        today = date.today()
+        if earning_start:
+            accrual_start = effective_start if effective_start and effective_start > earning_start else earning_start
+            months_elapsed = max(0, (today.year - accrual_start.year) * 12 + today.month - accrual_start.month)
+            accrued = round(base_days / 12 * months_elapsed, 1)
+        else:
+            accrued = 0
+
+        days_used = max(0, round(accrued - days_available))
+        db.set_initial_accrued(session['user_id'], days_used, period_start, start_date=effective_start)
         session['needs_initial_accrued'] = False
-        flash('Holiday balance saved!', 'success')
+        flash(_('Holiday balance saved!'), 'success')
         return redirect(url_for('calendar_redirect'))
     return render_template('initial_accrued.html',
-                           period_label=period_label, days_off=days_off,
-                           period_start=period_start, period_end=period_end)
+                           earning_start=earning_start,
+                           earning_end=earning_end)
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +351,7 @@ def calendar_redirect():
         if departments:
             dept_id = departments[0][0]
         else:
-            flash('No departments have been created yet.', 'warning')
+            flash(_('No departments have been created yet.'), 'warning')
             return redirect(url_for('review_requests_page') if session.get('role') == 'admin' else url_for('profile'))
     return redirect(url_for('calendar_view', dept_id=dept_id))
 
@@ -330,14 +363,14 @@ def calendar_view(dept_id):
     all_departments = db.get_all_departments()
     dept_exists = any(d[0] == dept_id for d in all_departments)
     if not dept_exists:
-        flash('Department not found.', 'error')
+        flash(_('Department not found.'), 'error')
         return redirect(url_for('calendar_redirect'))
 
     # Admins can view any department; non-admins can only view their own
     user_dept_id = db.get_user_department_id(session['user_id'])
     if session.get('role') != 'admin' and user_dept_id != dept_id:
         if user_dept_id is None:
-            flash('You are not assigned to any department.', 'warning')
+            flash(_('You are not assigned to any department.'), 'warning')
             return redirect(url_for('profile'))
         return redirect(url_for('calendar_view', dept_id=user_dept_id))
 
@@ -373,12 +406,14 @@ def calendar_view(dept_id):
         holiday_dict[hdate] = hname
 
     vacation_dict = {}
-    for uid, display, vdate, status, created_at, created_by in vacations_data:
+    for uid, display, vdate, status, created_at, created_by, self_paid in vacations_data:
         if not vdate:
             continue
         vacation_dict.setdefault(display, {})[vdate] = {
             'created_at': created_at,
             'created_by': created_by,
+            'self_paid': bool(self_paid),
+            'uid': uid,
         }
 
     weekend_days = set()
@@ -429,15 +464,22 @@ def calendar_view(dept_id):
                         user_suggested = round(remaining / months_left, 1)
                         user_usage = all_usage.get(uid, {})
                         chart = []
-                        d_m = date(pstart.year, pstart.month, 1)
+                        cum_used = 0
+                        d_m = date(earning_start.year, earning_start.month, 1)
                         end_m = date(pend.year, pend.month, 1)
                         while d_m <= end_m:
                             used_m = user_usage.get((d_m.year, d_m.month), 0)
                             is_past = (d_m.year < today.year) or (d_m.year == today.year and d_m.month < today.month)
                             is_current = (d_m.year == today.year and d_m.month == today.month)
+                            cum_used += used_m
+                            e_months = (d_m.year - earning_start.year) * 12 + d_m.month - earning_start.month
+                            accrued = min(entitlement, round(entitlement / 12 * max(0, e_months), 1))
                             chart.append({
                                 'label': month_names[d_m.month - 1],
+                                'year': d_m.year,
                                 'used': used_m,
+                                'accrued': accrued,
+                                'balance': round(accrued - cum_used, 1),
                                 'is_past': is_past,
                                 'is_current': is_current,
                                 'is_future': not is_past and not is_current,
@@ -458,24 +500,35 @@ def calendar_view(dept_id):
         vacation_summary = {'days_off_per_year': 34, 'used': 0,
                             'remaining': 34, 'accrued': 0}
 
-    # Build monthly bar chart data for the period
+    # Build monthly balance chart data for the period
     monthly_chart = []
+    user_entitlement = period_summary.get('days_off_per_year', 0) if period_summary else 0
     if period_start and period_end_date and period_summary:
         usage_by_month = db.get_vacation_days_per_month(
             session['user_id'], period_start, period_end_date)
         suggested = round(period_summary['remaining'] / period_summary['months_left'], 1)
         month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        d = date(period_start.year, period_start.month, 1)
+        # If the user joined after the earning period began, start the chart
+        # at their join date and accrue from there. Cap at prorated entitlement.
+        chart_start = vacation_summary.get('accrual_start') or earning_start
+        base_days = vacation_summary.get('base_days') or user_entitlement
+        cum_used = 0
+        d = date(chart_start.year, chart_start.month, 1)
         end_m = date(period_end_date.year, period_end_date.month, 1)
         while d <= end_m:
             used_m = usage_by_month.get((d.year, d.month), 0)
             is_past = (d.year < today.year) or (d.year == today.year and d.month < today.month)
             is_current = (d.year == today.year and d.month == today.month)
+            cum_used += used_m
+            e_months = (d.year - chart_start.year) * 12 + d.month - chart_start.month
+            accrued = min(user_entitlement, round(base_days / 12 * max(0, e_months), 1))
             monthly_chart.append({
                 'label': month_names[d.month - 1],
                 'year': d.year,
                 'used': used_m,
+                'accrued': accrued,
+                'balance': round(accrued - cum_used, 1),
                 'is_past': is_past,
                 'is_current': is_current,
                 'is_future': not is_past and not is_current,
@@ -503,8 +556,8 @@ def calendar_view(dept_id):
     review_dates = set()
 
     for rr in all_grid_reviews:
-        # (id, title, start_date, end_date, department_id, color, active)
-        req_id, _, rr_start, rr_end, rr_dept_id, rr_color, rr_active = rr
+        # (id, title, start_date, end_date, department_id, color, active, review_activated, creator_name)
+        req_id, rr_title, rr_start, rr_end, rr_dept_id, rr_color, rr_active, rr_activated, rr_creator = rr
         signed_users = signoff_map.get(req_id, set())
         d = rr_start
         while d <= rr_end:
@@ -518,13 +571,13 @@ def calendar_view(dept_id):
                 if rr_active:
                     if uid in signed_users:
                         prio = PRIORITY_ACTIVE_SIGNED
-                        cell = (rr_color, 0.45, True)
+                        cell = (rr_color, 0.45, True, rr_title, True, rr_activated, rr_creator)
                     else:
                         prio = PRIORITY_ACTIVE_PENDING
-                        cell = (rr_color, 1.0, False)
+                        cell = (rr_color, 1.0, False, rr_title, True, rr_activated, rr_creator)
                 else:
                     prio = PRIORITY_INACTIVE
-                    cell = (rr_color, 0.15, False)
+                    cell = (rr_color, 0.15, False, rr_title, False, rr_activated, rr_creator)
                 cur_prio = user_review_priority.get(uid, {}).get(d, 0)
                 if prio > cur_prio:
                     user_review_cells.setdefault(uid, {})[d] = cell
@@ -554,6 +607,7 @@ def calendar_view(dept_id):
         'earning_start': earning_start,
         'earning_end': earning_end,
         'monthly_chart': monthly_chart,
+        'user_entitlement': user_entitlement,
         'suggested_per_month': suggested if monthly_chart else 0,
         'admin_summaries': admin_summaries,
         'pending_reviews': pending_reviews,
@@ -561,13 +615,13 @@ def calendar_view(dept_id):
         'review_dates': review_dates,
         'user_review_cells': user_review_cells,
         'presets': [
-            {'label': '7 days',  'from': today.isoformat(), 'to': (today + timedelta(days=6)).isoformat(),  'active': start_date == today and (end_date - start_date).days == 6},
-            {'label': '14 days', 'from': today.isoformat(), 'to': (today + timedelta(days=13)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 13},
-            {'label': '30 days', 'from': today.isoformat(), 'to': (today + timedelta(days=29)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 29},
-            {'label': '60 days', 'from': today.isoformat(), 'to': (today + timedelta(days=59)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 59},
-            {'label': '90 days', 'from': today.isoformat(), 'to': (today + timedelta(days=89)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 89},
+            {'label': _('7 days'),  'from': today.isoformat(), 'to': (today + timedelta(days=6)).isoformat(),  'active': start_date == today and (end_date - start_date).days == 6},
+            {'label': _('14 days'), 'from': today.isoformat(), 'to': (today + timedelta(days=13)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 13},
+            {'label': _('30 days'), 'from': today.isoformat(), 'to': (today + timedelta(days=29)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 29},
+            {'label': _('60 days'), 'from': today.isoformat(), 'to': (today + timedelta(days=59)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 59},
+            {'label': _('90 days'), 'from': today.isoformat(), 'to': (today + timedelta(days=89)).isoformat(), 'active': start_date == today and (end_date - start_date).days == 89},
         ] + ([{
-            'label': 'Entire year',
+            'label': _('Entire year'),
             'from': period_start.isoformat(),
             'to': period_end_date.isoformat(),
             'active': period_start == start_date and period_end_date == end_date,
@@ -586,20 +640,21 @@ def add_vacation():
     user_id = request.form.get('user_id', type=int)
     vacation_date = request.form.get('vacation_date')
     end_date = request.form.get('end_date')
+    self_paid = request.form.get('self_paid') == '1'
     if not user_id or not vacation_date:
-        flash('Please select a user and date.', 'error')
+        flash(_('Please select a user and date.'), 'error')
         return redirect(url_for('calendar_redirect'))
     start = date.fromisoformat(vacation_date)
     end = date.fromisoformat(end_date) if end_date else start
     if start > end:
-        flash('End date must be after start date.', 'error')
+        flash(_('End date must be after start date.'), 'error')
         return redirect(url_for('calendar_redirect'))
     requester = session.get('username', '')
-    added, skipped = db.add_vacation_for_user(user_id, start, end, requested_by=requester)
+    added, skipped = db.add_vacation_for_user(user_id, start, end, requested_by=requester, self_paid=self_paid)
     if added:
-        flash(f'Added {added} vacation day(s)!', 'success')
+        flash(_('Added {} vacation day(s)!').format(added), 'success')
     if skipped:
-        flash(f'Skipped {skipped} duplicate day(s).', 'info')
+        flash(_('Skipped {} duplicate day(s).').format(skipped), 'info')
     referer = request.form.get('redirect') or url_for('calendar_redirect')
     return redirect(referer)
 
@@ -608,7 +663,7 @@ def add_vacation():
 @login_required
 def delete_vacation(vacation_id):
     db.delete_vacation(vacation_id)
-    flash('Vacation day deleted.', 'success')
+    flash(_('Vacation day deleted.'), 'success')
     return redirect(url_for('calendar_redirect'))
 
 
@@ -619,20 +674,20 @@ def remove_vacations_by_dates():
     start = request.form.get('start_date')
     end = request.form.get('end_date')
     if not user_id or not start or not end:
-        flash('Missing parameters.', 'error')
+        flash(_('Missing parameters.'), 'error')
         return redirect(url_for('calendar_redirect'))
     # Non-admins can only remove their own vacations
     if session.get('role') != 'admin' and user_id != session.get('user_id'):
-        flash('You can only remove your own vacations.', 'error')
+        flash(_('You can only remove your own vacations.'), 'error')
         return redirect(url_for('calendar_redirect'))
     start_date = date.fromisoformat(start)
     end_date = date.fromisoformat(end)
     ids = db.get_vacation_ids_for_user_dates(user_id, start_date, end_date)
     if ids:
         deleted = db.delete_vacation_bulk(ids)
-        flash(f'Deleted {deleted} vacation day(s).', 'success')
+        flash(_('Deleted {} vacation day(s).').format(deleted), 'success')
     else:
-        flash('No vacation days found in that range.', 'warning')
+        flash(_('No vacation days found in that range.'), 'warning')
     return redirect(url_for('calendar_redirect'))
 
 
@@ -674,7 +729,7 @@ def my_vacations():
 @login_required
 def request_removal(vacation_day_id):
     db.delete_vacation(vacation_day_id)
-    flash('Vacation day deleted.', 'success')
+    flash(_('Vacation day deleted.'), 'success')
     return redirect(url_for('my_vacations'))
 
 
@@ -683,10 +738,10 @@ def request_removal(vacation_day_id):
 def bulk_request_removal():
     ids = request.form.getlist('ids', type=int)
     if not ids:
-        flash('No vacation days selected.', 'warning')
+        flash(_('No vacation days selected.'), 'warning')
         return redirect(url_for('my_vacations'))
     deleted = db.delete_vacation_bulk(ids)
-    flash(f'{deleted} vacation day(s) deleted.', 'success')
+    flash(_('{} vacation day(s) deleted.').format(deleted), 'success')
     return redirect(url_for('my_vacations'))
 
 
@@ -708,25 +763,25 @@ def add_holiday():
     holiday_date = request.form.get('holiday_date')
     end_date = request.form.get('end_date')
     if not name:
-        flash('Please enter a holiday name.', 'error')
+        flash(_('Please enter a holiday name.'), 'error')
         return redirect(url_for('holidays'))
     if not holiday_date:
-        flash('Please select a date.', 'error')
+        flash(_('Please select a date.'), 'error')
         return redirect(url_for('holidays'))
     start = date.fromisoformat(holiday_date)
     if end_date:
         end = date.fromisoformat(end_date)
         if start > end:
-            flash('End date must be after start date.', 'error')
+            flash(_('End date must be after start date.'), 'error')
             return redirect(url_for('holidays'))
         added, skipped = db.add_holiday_range(start, end, name)
         if added:
-            flash(f'Added {added} holiday day(s)!', 'success')
+            flash(_('Added {} holiday day(s)!').format(added), 'success')
         if skipped:
-            flash(f'Skipped {skipped} duplicate day(s).', 'info')
+            flash(_('Skipped {} duplicate day(s).').format(skipped), 'info')
     else:
         success, msg = db.add_holiday(start, name)
-        flash(msg, 'success' if success else 'warning')
+        flash(_(msg), 'success' if success else 'warning')
     return redirect(url_for('holidays'))
 
 
@@ -758,10 +813,10 @@ def events():
 def create_event():
     name = request.form.get('event_name', '').strip()
     if not name:
-        flash('Please enter an event name.', 'error')
+        flash(_('Please enter an event name.'), 'error')
         return redirect(url_for('events'))
     success, msg = db.create_event(name)
-    flash(msg, 'success' if success else 'error')
+    flash(_(msg), 'success' if success else 'error')
     return redirect(url_for('events'))
 
 
@@ -784,7 +839,7 @@ def delete_event(event_id):
 def event_detail(event_id):
     event = db.get_event_by_id(event_id)
     if not event:
-        flash('Event not found.', 'error')
+        flash(_('Event not found.'), 'error')
         return redirect(url_for('events'))
     eid, ename, created_at = event
     responses = db.get_event_responses(eid)
@@ -831,7 +886,7 @@ def update_profile():
     session['initials'] = initials or session.get('username', '')
     session['font'] = font or ''
     session['email'] = email or ''
-    flash('Profile updated!', 'success')
+    flash(_('Profile updated!'), 'success')
     return redirect(url_for('profile'))
 
 
@@ -844,16 +899,16 @@ def change_password():
     new_pw = request.form.get('new_password', '')
     confirm = request.form.get('confirm_password', '')
     if not current_pw or not new_pw or not confirm:
-        flash('Please fill in all fields.', 'error')
+        flash(_('Please fill in all fields.'), 'error')
     elif new_pw != confirm:
-        flash('Passwords do not match.', 'error')
+        flash(_('Passwords do not match.'), 'error')
     elif len(new_pw) < 4:
-        flash('Password must be at least 4 characters.', 'error')
+        flash(_('Password must be at least 4 characters.'), 'error')
     elif not db.authenticate_user(username, current_pw):
-        flash('Current password is incorrect.', 'error')
+        flash(_('Current password is incorrect.'), 'error')
     else:
         db.update_password(session['user_id'], new_pw)
-        flash('Password updated!', 'success')
+        flash(_('Password updated!'), 'success')
     return redirect(url_for('profile'))
 
 
@@ -878,13 +933,13 @@ def user_management():
 def set_user_role(user_id):
     new_role = request.form.get('role')
     if new_role not in ('admin', 'user'):
-        flash('Invalid role.', 'error')
+        flash(_('Invalid role.'), 'error')
         return redirect(url_for('user_management'))
     if user_id == session.get('user_id') and new_role != 'admin':
-        flash('You cannot remove your own admin role.', 'error')
+        flash(_('You cannot remove your own admin role.'), 'error')
         return redirect(url_for('user_management'))
     db.set_user_role(user_id, new_role)
-    flash('Role updated.', 'success')
+    flash(_('Role updated.'), 'success')
     return redirect(url_for('user_management'))
 
 
@@ -892,7 +947,7 @@ def set_user_role(user_id):
 @admin_required
 def toggle_user_active(user_id):
     db.toggle_user_active(user_id)
-    flash('User visibility updated.', 'success')
+    flash(_('User visibility updated.'), 'success')
     return redirect(url_for('user_management'))
 
 
@@ -901,10 +956,10 @@ def toggle_user_active(user_id):
 def set_display_name(user_id):
     display_name = request.form.get('display_name', '').strip()
     if not display_name:
-        flash('Name cannot be empty.', 'error')
+        flash(_('Name cannot be empty.'), 'error')
         return redirect(url_for('user_management'))
     db.update_display_name(user_id, display_name)
-    flash('Name updated.', 'success')
+    flash(_('Name updated.'), 'success')
     return redirect(url_for('user_management'))
 
 
@@ -913,10 +968,10 @@ def set_display_name(user_id):
 def set_days_off(user_id):
     days_off = request.form.get('days_off', type=int)
     if days_off is None or days_off < 0:
-        flash('Invalid number of days.', 'error')
+        flash(_('Invalid number of days.'), 'error')
         return redirect(url_for('user_management'))
     db.update_days_off(user_id, days_off)
-    flash('Days off updated.', 'success')
+    flash(_('Days off updated.'), 'success')
     return redirect(url_for('user_management'))
 
 
@@ -926,10 +981,10 @@ def set_start_date(user_id):
     start_date_str = request.form.get('start_date')
     if not start_date_str:
         db.update_start_date(user_id, None)
-        flash('Start date cleared.', 'success')
+        flash(_('Start date cleared.'), 'success')
     else:
         db.update_start_date(user_id, date.fromisoformat(start_date_str))
-        flash('Start date updated.', 'success')
+        flash(_('Start date updated.'), 'success')
     return redirect(url_for('user_management'))
 
 
@@ -939,14 +994,22 @@ def admin_change_password(user_id):
     new_pw = request.form.get('new_password', '')
     confirm = request.form.get('confirm_password', '')
     if not new_pw or not confirm:
-        flash('Please fill in all password fields.', 'error')
+        flash(_('Please fill in all password fields.'), 'error')
     elif new_pw != confirm:
-        flash('Passwords do not match.', 'error')
+        flash(_('Passwords do not match.'), 'error')
     elif len(new_pw) < 4:
-        flash('Password must be at least 4 characters.', 'error')
+        flash(_('Password must be at least 4 characters.'), 'error')
     else:
         db.update_password(user_id, new_pw)
-        flash('Password changed.', 'success')
+        flash(_('Password changed.'), 'success')
+    return redirect(url_for('user_management'))
+
+
+@app.route('/users/<int:user_id>/reset-holidays', methods=['POST'])
+@admin_required
+def reset_user_holidays(user_id):
+    db.reset_user_holidays(user_id)
+    flash(_('Holiday data reset. User will set up their balance on next login.'), 'success')
     return redirect(url_for('user_management'))
 
 
@@ -1063,7 +1126,7 @@ def pre_admins():
         raw = request.form.get('emails', '')
         emails = [line.strip() for line in raw.splitlines() if line.strip()]
         db.set_pre_admin_emails(emails)
-        flash('Pre-admin list updated.', 'success')
+        flash(_('Pre-admin list updated.'), 'success')
         return redirect(url_for('pre_admins'))
     emails = db.get_pre_admin_emails()
     return render_template('pre_admins.html', emails=emails, active_tab='pre_admins')
@@ -1101,10 +1164,10 @@ def generate_holidays():
 def create_department():
     name = request.form.get('name', '').strip()
     if not name:
-        flash('Please enter a department name.', 'error')
+        flash(_('Please enter a department name.'), 'error')
         return redirect(url_for('organisation'))
     success, msg = db.create_department(name)
-    flash(msg, 'success' if success else 'error')
+    flash(_(msg), 'success' if success else 'error')
     return redirect(url_for('organisation'))
 
 
@@ -1149,7 +1212,7 @@ def set_user_department(uid):
         if dept_id in current_secondary:
             current_secondary.remove(dept_id)
             db.set_user_secondary_departments(uid, current_secondary)
-    flash('Department updated.', 'success')
+    flash(_('Department updated.'), 'success')
     return redirect(url_for('user_management'))
 
 
@@ -1160,7 +1223,7 @@ def set_user_secondary_departments(uid):
     primary = db.get_user_department_id(uid)
     dept_ids = [d for d in dept_ids if d != primary]
     db.set_user_secondary_departments(uid, dept_ids)
-    flash('Secondary departments updated.', 'success')
+    flash(_('Secondary departments updated.'), 'success')
     return redirect(url_for('user_management'))
 
 
@@ -1168,10 +1231,10 @@ def set_user_secondary_departments(uid):
 @admin_required
 def delete_user(uid):
     if uid == session.get('user_id'):
-        flash('You cannot delete yourself.', 'error')
+        flash(_('You cannot delete yourself.'), 'error')
         return redirect(url_for('user_management'))
     db.delete_user(uid)
-    flash('User deleted.', 'success')
+    flash(_('User deleted.'), 'success')
     return redirect(url_for('user_management'))
 
 
@@ -1187,18 +1250,18 @@ def create_review_request():
     end_date_str = request.form.get('end_date')
     dept_id = request.form.get('department_id', type=int)
     if not title or not start_date_str or not end_date_str or not dept_id:
-        flash('Please fill in all fields.', 'error')
+        flash(_('Please fill in all fields.'), 'error')
         return redirect(url_for('review_requests_page'))
     color = request.form.get('color', '#f59e0b').strip()
     start = date.fromisoformat(start_date_str)
     end = date.fromisoformat(end_date_str)
     if start > end:
-        flash('End date must be after start date.', 'error')
+        flash(_('End date must be after start date.'), 'error')
         return redirect(url_for('review_requests_page'))
     db.create_review_request(title, start, end, session['user_id'], department_id=dept_id, color=color)
     db.insert_operation_log(session['user_id'], 'review_request',
                             f'Created review request: {title}')
-    flash('Review request created.', 'success')
+    flash(_('Review request created.'), 'success')
     return redirect(url_for('review_requests_page'))
 
 
@@ -1267,7 +1330,7 @@ def mark_review_seen(request_id):
 @login_required
 def sign_off_review(request_id):
     db.mark_review_decided(request_id, session['user_id'])
-    flash('Review signed off!', 'success')
+    flash(_('Review signed off!'), 'success')
     return redirect(request.referrer or url_for('calendar_redirect'))
 
 
@@ -1275,7 +1338,7 @@ def sign_off_review(request_id):
 @login_required
 def undo_sign_off_review(request_id):
     db.undo_review_decided(request_id, session['user_id'])
-    flash('Sign-off withdrawn.', 'success')
+    flash(_('Sign-off withdrawn.'), 'success')
     return redirect(url_for('my_vacations'))
 
 
@@ -1293,6 +1356,108 @@ def logs():
     return render_template('logs.html', entries=entries, users=users,
                            filter_user_id=user_id, filter_operation_type=operation_type,
                            active_tab='logs')
+
+
+# ---------------------------------------------------------------------------
+# Chart demo (vacation pace visualisation options)
+# ---------------------------------------------------------------------------
+
+@app.route('/chart-demo')
+@login_required
+def chart_demo():
+    today = date.today()
+    period_id = db.get_current_period_id()
+    if not period_id:
+        flash(_('No active holiday period.'), 'error')
+        return redirect('/calendar')
+
+    periods = db.get_holiday_periods()
+    period_start = period_end_date = earning_start = earning_end = None
+    period_label = None
+    for pid, plabel, pstart, pend, estart, eend in periods:
+        if pid == period_id:
+            period_label = plabel
+            period_start = pstart
+            period_end_date = pend
+            earning_start = estart or pstart
+            earning_end = eend or pend
+            break
+
+    if not period_start:
+        flash(_('No active holiday period.'), 'error')
+        return redirect('/calendar')
+
+    period_summary = db.get_period_vacation_summary(
+        session['user_id'], period_start, period_end_date,
+        earning_start=earning_start, earning_end=earning_end)
+    months_left = (period_end_date.year - today.year) * 12 + period_end_date.month - today.month
+    if months_left < 1:
+        months_left = 1
+    period_summary['months_left'] = months_left
+
+    vacation_summary = db.get_vacation_summary(
+        session['user_id'], period_start, period_end_date,
+        earning_start=earning_start, earning_end=earning_end)
+
+    usage_by_month = db.get_vacation_days_per_month(
+        session['user_id'], period_start, period_end_date)
+    suggested = round(period_summary['remaining'] / months_left, 1)
+
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    entitlement = period_summary.get('days_off_per_year', 0)
+    monthly_chart = []
+    cumulative_used = 0
+    d = date(period_start.year, period_start.month, 1)
+    end_m = date(period_end_date.year, period_end_date.month, 1)
+    while d <= end_m:
+        used_m = usage_by_month.get((d.year, d.month), 0)
+        is_past = (d.year < today.year) or (d.year == today.year and d.month < today.month)
+        is_current = (d.year == today.year and d.month == today.month)
+        cumulative_used += used_m
+        # How many full earning months have elapsed by end of this month
+        earning_months_elapsed = (d.year - earning_start.year) * 12 + d.month - earning_start.month + 1
+        accrued = min(entitlement, round(entitlement / 12 * max(0, earning_months_elapsed), 1))
+        monthly_chart.append({
+            'label': month_names[d.month - 1],
+            'year': d.year,
+            'used': used_m,
+            'cumulative_used': cumulative_used,
+            'accrued': accrued,
+            'balance': round(accrued - cumulative_used, 1),
+            'is_past': is_past,
+            'is_current': is_current,
+            'is_future': not is_past and not is_current,
+        })
+        if d.month == 12:
+            d = date(d.year + 1, 1, 1)
+        else:
+            d = date(d.year, d.month + 1, 1)
+
+    return render_template('chart_demo.html',
+                           today=today,
+                           monthly_chart=monthly_chart,
+                           suggested_per_month=suggested,
+                           period_summary=period_summary,
+                           vacation_summary=vacation_summary,
+                           period_label=period_label,
+                           period_end_date=period_end_date,
+                           entitlement=entitlement)
+
+
+# ---------------------------------------------------------------------------
+# Language switch
+# ---------------------------------------------------------------------------
+
+@app.route('/set-language', methods=['POST'])
+def set_language():
+    lang = request.form.get('lang', 'da')
+    if lang not in ('en', 'da'):
+        lang = 'da'
+    session['lang'] = lang
+    resp = make_response(redirect(request.referrer or '/'))
+    resp.set_cookie('lang', lang, max_age=31536000, httponly=True, samesite='Lax')
+    return resp
 
 
 # ---------------------------------------------------------------------------

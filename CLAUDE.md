@@ -20,6 +20,9 @@ Team vacation planning application built with Flask + HTMX + Tailwind CSS, runni
 ```
 app.py                          # Flask app — all routes, auth decorators
 db.py                           # All database functions (auth, vacations, holidays, events, operation log)
+i18n.py                         # Translation infrastructure — _() function and get_locale()
+translations/
+  da.json                       # Danish translations (English key → Danish value)
 migrate.py                      # Database migration runner
 migrations/                     # Numbered SQL migration files
 templates/
@@ -47,6 +50,38 @@ templates/
 - **HTMX for interactive updates.** Delete buttons, RSVP toggles, and calendar navigation use HTMX. Form submissions use standard POST-redirect-GET.
 - **Keep imports at the top** of each file, to keep the code clean and readable.
 - **Date format is `1. feb - 2026`**. All user-facing dates use the `|fmtdate` Jinja2 filter (e.g. `{{ date|fmtdate }}`). For dates with time, use `|fmtdatetime` (e.g. `1. feb - 2026 14:30`). HTML `<input type="date">` values must stay in ISO format (required by browsers).
+
+### Internationalization (i18n)
+
+The app supports two languages: **English** (code language) and **Danish** (default for users). All user-facing text must be wrapped in the `_()` translation function.
+
+#### How it works
+
+- **`i18n.py`**: Contains the `_()` function and `get_locale()` helper. Loaded translations live in memory.
+- **`translations/da.json`**: Flat JSON dictionary mapping English strings → Danish translations. English is the key, Danish is the value.
+- **Language preference**: Stored in `session['lang']` and a `lang` cookie. Default is `da`. Switched via `POST /set-language`.
+- **Language picker**: In the footer of `base.html` (bottom-left corner, DA | EN buttons).
+
+#### Rules for writing translatable text
+
+1. **Write all code in English.** The English string is the source of truth — it is both the code-level string and the fallback if no translation exists.
+2. **Wrap every user-facing string in `_()`.**
+   - In templates: `{{ _('Some text') }}`
+   - In `app.py` (flash messages, etc.): `flash(_('Some message.'), 'error')`
+3. **For strings with dynamic values**, use `.format()` on the translated string:
+   - `flash(_('Added {} vacation day(s)!').format(count), 'success')`
+   - In da.json: `"Added {} vacation day(s)!": "Tilføjet {} feriedag(e)!"`
+4. **For mixed static + dynamic text in templates**, split into parts:
+   - `{{ _('Holiday Period') }} {{ period_label }}`
+5. **Add a Danish translation** for every new string in `translations/da.json`.
+6. **Do NOT translate**: variable names, CSS classes, URLs, HTML attributes (except user-visible ones like `title` and `placeholder`), JavaScript internals, or brand names used as identifiers.
+7. **Placeholders** like `placeholder="e.g., Christmas"` should also be wrapped: `placeholder="{{ _('e.g., Christmas') }}"`.
+
+#### Adding a new translatable string
+
+1. Write the English string in your code wrapped in `_()`.
+2. Open `translations/da.json` and add a new entry: `"English text": "Danish text"`.
+3. If you don't know the Danish translation, add the English string as the value — it will display in English until translated.
 
 ### Holiday Periods: Earning vs Spending
 

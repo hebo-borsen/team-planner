@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Users</h1>
+<h1 class="text-2xl font-bold mb-6">{{ _('Users') }}</h1>
 
 <div class="space-y-4">
     {% for uid, uname, udisplay, uemail, urole, udays_off, ustart, uactive, udept_id in all_users %}
     {% set udays = udays_off if udays_off is not none else 34 %}
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden {{ 'opacity-50' if not uactive }}">
         <!-- Row 1: Identity & Role -->
-        <div class="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+        <div class="px-5 py-4 flex items-start justify-between gap-4 flex-wrap">
             <div class="flex items-center gap-4">
                 <div>
                     <form method="post" action="/users/{{ uid }}/display-name" class="inline-flex items-center gap-1">
@@ -18,64 +18,74 @@
                                class="font-semibold text-base bg-transparent border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-borsen-red focus:outline-none px-0 py-0">
                         <button type="submit"
                                 class="hidden px-2 py-0.5 bg-borsen-red hover:bg-borsen-red-dark text-white text-xs font-medium rounded">
-                            Save
+                            {{ _('Save') }}
                         </button>
                     </form>
                     <div class="text-xs text-gray-400 dark:text-gray-500">{{ uname }}{% if uemail %} &middot; {{ uemail }}{% endif %}</div>
                 </div>
                 {% if urole == 'admin' %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200">
-                    Admin
+                    {{ _('Admin') }}
                 </span>
                 {% else %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                    User
+                    {{ _('User') }}
                 </span>
                 {% endif %}
                 {% if not uactive %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
-                    Hidden
+                    {{ _('Hidden') }}
                 </span>
                 {% endif %}
             </div>
-            <div class="flex items-start gap-2 flex-wrap justify-end">
-                {% if urole == 'admin' and uid != user_id %}
-                <form method="post" action="/users/{{ uid }}/role" class="inline">
-                    <input type="hidden" name="role" value="user">
-                    <button type="submit"
-                            class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded">
-                        Remove Admin
-                    </button>
-                </form>
-                {% elif urole != 'admin' %}
-                <form method="post" action="/users/{{ uid }}/role" class="inline">
-                    <input type="hidden" name="role" value="admin">
-                    <button type="submit"
-                            class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded">
-                        Make Admin
-                    </button>
-                </form>
-                {% endif %}
-                <details class="group">
-                    <summary class="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-xs font-medium rounded cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
-                        Danger zone
+            <div class="flex flex-col gap-2 items-end">
+                <details class="group self-stretch flex flex-col items-end">
+                    <summary class="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-xs font-medium rounded cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden ml-auto">
+                        {{ _('Actions') }}
                         <span class="transition-transform group-open:rotate-180">▾</span>
                     </summary>
-                    <div class="mt-2 flex gap-2 flex-wrap justify-end">
+                    <div class="mt-2 flex flex-col gap-2 items-end">
+                        {% if urole == 'admin' and uid != user_id %}
+                        <form method="post" action="/users/{{ uid }}/role" class="inline">
+                            <input type="hidden" name="role" value="user">
+                            <button type="submit"
+                                    class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs font-medium rounded">
+                                {{ _('Remove Admin') }}
+                            </button>
+                        </form>
+                        {% elif urole != 'admin' %}
+                        <form method="post" action="/users/{{ uid }}/role" class="inline">
+                            <input type="hidden" name="role" value="admin">
+                            <button type="submit"
+                                    class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded">
+                                {{ _('Make Admin') }}
+                            </button>
+                        </form>
+                        {% endif %}
+                        <div class="flex flex-col items-end">
+                            <form method="post" action="/users/{{ uid }}/reset-holidays" class="inline"
+                                  onsubmit="return confirm('{{ _('This will delete all vacation days, withdraw all review sign-offs, and ask the user to re-enter their holiday balance on next login. Continue?') }}')">
+                                <button type="submit"
+                                        class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded">
+                                    {{ _('Reset Holidays') }}
+                                </button>
+                            </form>
+                            <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 text-right">{{ _('Deletes all vacation days, withdraws review sign-offs, and asks the user to re-enter their balance on next login.') }}</p>
+                        </div>
                         <button onclick="document.getElementById('pw-modal-{{ uid }}').classList.remove('hidden')"
                                 class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded">
-                            Change Password
+                            {{ _('Change Password') }}
                         </button>
                         <form method="post" action="/users/{{ uid }}/toggle-active" class="inline">
                             <button type="submit"
                                     class="px-3 py-1 {{ 'bg-red-600 hover:bg-red-700' if uactive else 'bg-green-600 hover:bg-green-700' }} text-white text-xs font-medium rounded">
-                                {{ 'Hide' if uactive else 'Show' }}
+                                {{ _('Hide') if uactive else _('Show') }}
                             </button>
                         </form>
                         {% if uid != user_id %}
                         <button onclick="document.getElementById('delete-modal-{{ uid }}').classList.remove('hidden')"
                                 class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded">
-                            Delete
+                            {{ _('Delete') }}
                         </button>
                         {% endif %}
                     </div>
@@ -87,11 +97,11 @@
         <div class="px-5 py-3 bg-borsen-cream-dark dark:bg-gray-700/30 border-t border-gray-200 dark:border-gray-700 flex items-center gap-8 flex-wrap text-sm">
             <div>
                 <div class="flex items-center gap-2">
-                    <span class="text-gray-500 dark:text-gray-400">Department:</span>
+                    <span class="text-gray-500 dark:text-gray-400">{{ _('Department:') }}</span>
                     <form method="post" action="/users/{{ uid }}/department" class="inline">
                         <select name="department_id" onchange="this.form.submit()"
                                 class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm">
-                            <option value="">— None —</option>
+                            <option value="">{{ _('— None —') }}</option>
                             {% for did, dname, dsort, dfun in departments %}
                             <option value="{{ did }}" {{ 'selected' if udept_id == did else '' }}>{{ dname }}</option>
                             {% endfor %}
@@ -101,7 +111,7 @@
                 {% if departments|length > 1 and udept_id %}
                 {% set user_secondary = secondary_depts.get(uid, []) %}
                 <div class="flex items-center gap-2 mt-1">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">Also show in:</span>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ _('Also show in:') }}</span>
                     {% if user_secondary %}
                     <span class="text-xs text-gray-600 dark:text-gray-400">
                         {% for did, dname, dsort, dfun in departments if did in user_secondary %}{{ dname }}{{ ', ' if not loop.last else '' }}{% endfor %}
@@ -109,7 +119,7 @@
                     {% endif %}
                     <button type="button" onclick="document.getElementById('secondary-modal-{{ uid }}').classList.remove('hidden')"
                             class="px-1.5 py-0.5 text-xs text-borsen-red dark:text-red-400 hover:bg-borsen-red-light dark:hover:bg-red-900/20 rounded">
-                        {{ 'Edit' if user_secondary else 'Add' }}
+                        {{ _('Edit') if user_secondary else _('Add') }}
                     </button>
                 </div>
                 <!-- Secondary departments modal -->
@@ -117,8 +127,8 @@
                     <div class="fixed inset-0 bg-black/50" onclick="this.parentElement.classList.add('hidden')"></div>
                     <div class="fixed inset-0 flex items-center justify-center p-4 pointer-events-none">
                         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm pointer-events-auto">
-                            <h3 class="text-lg font-semibold mb-1">Also show in</h3>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{ udisplay or uname }} will appear as a guest in the selected departments.</p>
+                            <h3 class="text-lg font-semibold mb-1">{{ _('Also show in') }}</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{ udisplay or uname }} {{ _('will appear as a guest in the selected departments.') }}</p>
                             <form method="post" action="/users/{{ uid }}/secondary-departments">
                                 <div class="space-y-2 mb-4">
                                     {% for did, dname, dsort, dfun in departments %}
@@ -135,11 +145,11 @@
                                 <div class="flex justify-end gap-2">
                                     <button type="button" onclick="document.getElementById('secondary-modal-{{ uid }}').classList.add('hidden')"
                                             class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                        Cancel
+                                        {{ _('Cancel') }}
                                     </button>
                                     <button type="submit"
                                             class="px-4 py-2 text-sm font-medium rounded-lg bg-borsen-red hover:bg-borsen-red-dark text-white">
-                                        Save
+                                        {{ _('Save') }}
                                     </button>
                                 </div>
                             </form>
@@ -149,7 +159,7 @@
                 {% endif %}
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Days off / year:</span>
+                <span class="text-gray-500 dark:text-gray-400">{{ _('Days off / year:') }}</span>
                 <form method="post" action="/users/{{ uid }}/days-off" class="inline-flex items-center gap-1">
                     <input type="number" name="days_off" value="{{ udays }}" min="0" max="365"
                            data-original="{{ udays }}"
@@ -157,12 +167,12 @@
                            class="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm text-center">
                     <button type="submit"
                             class="hidden px-2 py-1 bg-borsen-red hover:bg-borsen-red-dark text-white text-xs font-medium rounded">
-                        Save
+                        {{ _('Save') }}
                     </button>
                 </form>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-gray-500 dark:text-gray-400">Start date:</span>
+                <span class="text-gray-500 dark:text-gray-400">{{ _('Start date:') }}</span>
                 <form method="post" action="/users/{{ uid }}/start-date" class="inline-flex items-center gap-1">
                     <input type="date" name="start_date" value="{{ ustart.isoformat() if ustart else '' }}"
                            data-original="{{ ustart.isoformat() if ustart else '' }}"
@@ -170,7 +180,7 @@
                            class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm">
                     <button type="submit"
                             class="hidden px-2 py-1 bg-borsen-red hover:bg-borsen-red-dark text-white text-xs font-medium rounded">
-                        Save
+                        {{ _('Save') }}
                     </button>
                 </form>
             </div>
@@ -184,29 +194,29 @@
      onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">Change Password for {{ udisplay or uname }}</h2>
+            <h2 class="text-lg font-semibold">{{ _('Change Password for') }} {{ udisplay or uname }}</h2>
             <button onclick="document.getElementById('pw-modal-{{ uid }}').classList.add('hidden')"
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
         </div>
         <form method="post" action="/users/{{ uid }}/password" class="space-y-3">
             <div>
-                <label class="block text-sm font-medium mb-1">New Password</label>
+                <label class="block text-sm font-medium mb-1">{{ _('New Password') }}</label>
                 <input type="password" name="new_password" required
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">Confirm Password</label>
+                <label class="block text-sm font-medium mb-1">{{ _('Confirm Password') }}</label>
                 <input type="password" name="confirm_password" required
                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <div class="flex justify-end space-x-2 pt-2">
                 <button type="button" onclick="document.getElementById('pw-modal-{{ uid }}').classList.add('hidden')"
                         class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
-                    Cancel
+                    {{ _('Cancel') }}
                 </button>
                 <button type="submit"
                         class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
-                    Change Password
+                    {{ _('Change Password') }}
                 </button>
             </div>
         </form>
@@ -220,24 +230,24 @@
      onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold text-red-600 dark:text-red-400">Delete {{ udisplay or uname }}</h2>
+            <h2 class="text-lg font-semibold text-red-600 dark:text-red-400">{{ _('Delete') }} {{ udisplay or uname }}</h2>
             <button onclick="document.getElementById('delete-modal-{{ uid }}').classList.add('hidden')"
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
         </div>
-        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">This will permanently delete the user and all their data (vacations, event responses, etc.). This cannot be undone.</p>
-        <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">Type <strong>{{ uname }}</strong> to confirm:</p>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ _('This will permanently delete the user and all their data (vacations, event responses, etc.). This cannot be undone.') }}</p>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">{{ _('Type') }} <strong>{{ uname }}</strong> {{ _('to confirm:') }}</p>
         <input type="text" placeholder="{{ uname }}"
                oninput="var btn=document.getElementById('delete-btn-{{ uid }}');btn.disabled=this.value.toLowerCase()!=='{{ uname }}'.toLowerCase()"
                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm mb-4">
         <div class="flex justify-end space-x-2">
             <button type="button" onclick="document.getElementById('delete-modal-{{ uid }}').classList.add('hidden')"
                     class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
-                Cancel
+                {{ _('Cancel') }}
             </button>
             <form method="post" action="/users/{{ uid }}/delete" class="inline">
                 <button id="delete-btn-{{ uid }}" type="submit" disabled
                         class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                    Delete User
+                    {{ _('Delete User') }}
                 </button>
             </form>
         </div>

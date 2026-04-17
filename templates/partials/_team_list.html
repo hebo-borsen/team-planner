@@ -2,8 +2,8 @@
 <table class="w-full text-sm">
     <thead>
         <tr class="border-b border-gray-200 dark:border-gray-700">
-            <th class="text-left py-2 font-medium">Member</th>
-            <th class="text-right py-2 font-medium">Action</th>
+            <th class="text-left py-2 font-medium">{{ _('Member') }}</th>
+            <th class="text-right py-2 font-medium">{{ _('Action') }}</th>
         </tr>
     </thead>
     <tbody>
@@ -14,9 +14,9 @@
                 <button hx-delete="/admin/team/{{ mid }}"
                         hx-target="#team-list"
                         hx-swap="innerHTML"
-                        hx-confirm="Delete {{ mname }}? This will also remove their vacations and event responses."
+                        hx-confirm="{{ _('Delete {}? This will also remove their vacations and event responses.').format(mname) }}"
                         class="text-red-600 dark:text-red-400 hover:underline text-xs">
-                    Delete
+                    {{ _('Delete') }}
                 </button>
             </td>
         </tr>
@@ -24,5 +24,5 @@
     </tbody>
 </table>
 {% else %}
-<p class="text-sm text-gray-500 dark:text-gray-400">No team members yet.</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">{{ _('No team members yet.') }}</p>
 {% endif %}

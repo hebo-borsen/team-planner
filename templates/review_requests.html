@@ -1,32 +1,32 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Review Requests{% if nav_current_dept_name %} &mdash; {{ nav_current_dept_name }}{% endif %}</h1>
+<h1 class="text-2xl font-bold mb-6">{{ _('Review Requests') }}{% if nav_current_dept_name %} &mdash; {{ nav_current_dept_name }}{% endif %}</h1>
 
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-    <h2 class="text-lg font-semibold mb-4">Review Requests</h2>
+    <h2 class="text-lg font-semibold mb-4">{{ _('Review Requests') }}</h2>
 
     <form method="post" action="/review-requests" class="mb-6" id="rr-form">
         <div class="flex flex-wrap items-end gap-3">
             <div>
-                <label class="block text-xs font-medium mb-1">Title</label>
-                <input type="text" name="title" required placeholder="e.g. Q2 2026 Holiday Review"
+                <label class="block text-xs font-medium mb-1">{{ _('Title') }}</label>
+                <input type="text" name="title" required placeholder="{{ _('e.g. Q2 2026 Holiday Review') }}"
                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-64">
             </div>
             <div>
-                <label class="block text-xs font-medium mb-1">Start Date</label>
+                <label class="block text-xs font-medium mb-1">{{ _('Start Date') }}</label>
                 <input type="date" name="start_date" id="rr-start" required min="{{ today.isoformat() }}"
                        onchange="document.getElementById('rr-end').min = this.value"
                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <div>
-                <label class="block text-xs font-medium mb-1">End Date</label>
+                <label class="block text-xs font-medium mb-1">{{ _('End Date') }}</label>
                 <input type="date" name="end_date" id="rr-end" required min="{{ today.isoformat() }}"
                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
             </div>
             <input type="hidden" name="department_id" value="{{ nav_current_dept_id }}">
             <div>
-                <label class="block text-xs font-medium mb-1">Color</label>
+                <label class="block text-xs font-medium mb-1">{{ _('Color') }}</label>
                 <div class="flex items-center gap-1.5">
                     <input type="hidden" name="color" id="rr-color" value="#f59e0b">
                     {% set default_colors = ['#f59e0b', '#ef4444', '#8b5cf6', '#10b981'] %}
@@ -38,12 +38,12 @@
                     <input type="color" id="rr-custom-color" value="#f59e0b"
                            onchange="selectRRColor(this.value)"
                            class="w-7 h-7 rounded-full cursor-pointer border-2 border-transparent hover:border-gray-400"
-                           title="Custom color">
+                           title="{{ _('Custom color') }}">
                 </div>
             </div>
             <button type="submit"
                     class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
-                Create Request
+                {{ _('Create Request') }}
             </button>
         </div>
     </form>

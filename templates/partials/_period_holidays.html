@@ -2,10 +2,10 @@
 <table class="w-full text-sm">
     <thead>
         <tr class="border-b border-gray-200 dark:border-gray-700">
-            <th class="text-left py-2 font-medium">Holiday</th>
-            <th class="text-left py-2 font-medium">Date</th>
-            <th class="text-left py-2 font-medium">Day</th>
-            <th class="text-center py-2 font-medium">Enabled</th>
+            <th class="text-left py-2 font-medium">{{ _('Holiday') }}</th>
+            <th class="text-left py-2 font-medium">{{ _('Date') }}</th>
+            <th class="text-left py-2 font-medium">{{ _('Day') }}</th>
+            <th class="text-center py-2 font-medium">{{ _('Enabled') }}</th>
             <th class="w-10"></th>
         </tr>
     </thead>
@@ -27,7 +27,7 @@
                        onblur="if(!this.dataset.changed){this.classList.add('hidden'); this.previousElementSibling.classList.remove('hidden');}"
                        onchange="this.dataset.changed='1';">
                 {% if past %}
-                <span class="ml-1 text-xs text-gray-400 dark:text-gray-500">(passed)</span>
+                <span class="ml-1 text-xs text-gray-400 dark:text-gray-500">{{ _('(passed)') }}</span>
                 {% endif %}
             </td>
             <td class="py-2.5">
@@ -55,7 +55,7 @@
             <td class="py-2.5 text-center">
                 <button hx-delete="/settings/holidays/{{ hid }}/delete"
                         hx-target="#holiday-list" hx-swap="innerHTML"
-                        hx-confirm="Delete {{ hname }}?"
+                        hx-confirm="{{ _('Delete {}?').format(hname) }}"
                         class="text-gray-400 hover:text-red-600 dark:hover:text-red-400"
                         title="Delete holiday">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,7 +69,7 @@
     </tbody>
 </table>
 {% else %}
-<p class="text-sm text-gray-500 dark:text-gray-400 py-4">No holidays found for this period.</p>
+<p class="text-sm text-gray-500 dark:text-gray-400 py-4">{{ _('No holidays found for this period.') }}</p>
 {% endif %}
 
 {% if selected_period_id %}
@@ -77,34 +77,34 @@
       class="mt-4 flex flex-wrap items-end gap-3">
     <input type="hidden" name="period_id" value="{{ selected_period_id }}">
     <div>
-        <label class="block text-xs font-medium mb-1">Name</label>
-        <input type="text" name="name" required placeholder="Holiday name"
+        <label class="block text-xs font-medium mb-1">{{ _('Name') }}</label>
+        <input type="text" name="name" required placeholder="{{ _('Holiday name') }}"
                class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm w-48">
     </div>
     <div>
-        <label class="block text-xs font-medium mb-1">Date</label>
+        <label class="block text-xs font-medium mb-1">{{ _('Date') }}</label>
         <input type="date" name="holiday_date" required
                class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
     </div>
     <button type="submit"
             class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg transition-colors">
-        Add Holiday
+        {{ _('Add Holiday') }}
     </button>
 </form>
 
 {% if holidays %}
 <details class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-    <summary class="text-sm font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">Advanced</summary>
+    <summary class="text-sm font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">{{ _('Advanced') }}</summary>
     <div class="mt-3">
         <form hx-post="/organisation/holidays/generate" hx-target="#holiday-list" hx-swap="innerHTML"
-              hx-confirm="This will replace all holidays for ALL periods with the standard Danish public holidays. Continue?">
+              hx-confirm="{{ _('This will replace all holidays for ALL periods with the standard Danish public holidays. Continue?') }}">
             <input type="hidden" name="period_id" value="{{ selected_period_id }}">
             <button type="submit"
                     class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors">
-                Generate Danish holidays for all periods
+                {{ _('Generate Danish holidays for all periods') }}
             </button>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Replaces all holidays with standard Danish s&oslash;gnehelligdage (incl. day after Kr. Himmelfartsdag, excl. Grundlovsdag).
+                {{ _('Replaces all holidays with standard Danish s&oslash;gnehelligdage (incl. day after Kr. Himmelfartsdag, excl. Grundlovsdag).') }}
             </p>
         </form>
     </div>
@@ -112,14 +112,14 @@
 {% else %}
 <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
     <form hx-post="/organisation/holidays/generate" hx-target="#holiday-list" hx-swap="innerHTML"
-          hx-confirm="This will replace all holidays for ALL periods with the standard Danish public holidays. Continue?">
+          hx-confirm="{{ _('This will replace all holidays for ALL periods with the standard Danish public holidays. Continue?') }}">
         <input type="hidden" name="period_id" value="{{ selected_period_id }}">
         <button type="submit"
                 class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors">
-            Generate Danish holidays for all periods
+            {{ _('Generate Danish holidays for all periods') }}
         </button>
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Replaces all holidays with standard Danish s&oslash;gnehelligdage (incl. day after Kr. Himmelfartsdag, excl. Grundlovsdag).
+            {{ _('Replaces all holidays with standard Danish s&oslash;gnehelligdage (incl. day after Kr. Himmelfartsdag, excl. Grundlovsdag).') }}
         </p>
     </form>
 </div>

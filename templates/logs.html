@@ -1,36 +1,36 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Operation Logs</h1>
+<h1 class="text-2xl font-bold mb-6">{{ _('Operation Logs') }}</h1>
 
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
     <form method="get" action="/logs" class="flex items-end gap-4">
         <div>
-            <label class="block text-sm font-medium mb-1">User</label>
+            <label class="block text-sm font-medium mb-1">{{ _('User') }}</label>
             <select name="user_id"
                     class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
-                <option value="">All users</option>
+                <option value="">{{ _('All users') }}</option>
                 {% for uid, uname in users %}
                 <option value="{{ uid }}" {{ 'selected' if filter_user_id == uid }}>{{ uname }}</option>
                 {% endfor %}
             </select>
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">Operation type</label>
+            <label class="block text-sm font-medium mb-1">{{ _('Operation type') }}</label>
             <select name="operation_type"
                     class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm">
-                <option value="">All types</option>
-                <option value="holiday_recalculation" {{ 'selected' if filter_operation_type == 'holiday_recalculation' }}>Holiday recalculation</option>
-                <option value="setting_update" {{ 'selected' if filter_operation_type == 'setting_update' }}>Setting update</option>
+                <option value="">{{ _('All types') }}</option>
+                <option value="holiday_recalculation" {{ 'selected' if filter_operation_type == 'holiday_recalculation' }}>{{ _('Holiday recalculation') }}</option>
+                <option value="setting_update" {{ 'selected' if filter_operation_type == 'setting_update' }}>{{ _('Setting update') }}</option>
             </select>
         </div>
         <button type="submit"
                 class="px-4 py-2 bg-borsen-red hover:bg-borsen-red-dark text-white text-sm font-medium rounded-lg">
-            Filter
+            {{ _('Filter') }}
         </button>
         {% if filter_user_id or filter_operation_type %}
         <a href="/logs" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium rounded-lg">
-            Clear
+            {{ _('Clear') }}
         </a>
         {% endif %}
     </form>
@@ -40,10 +40,10 @@
     <table class="min-w-full text-sm">
         <thead>
             <tr class="bg-gray-100 dark:bg-gray-700">
-                <th class="px-4 py-3 text-left font-medium">Time</th>
-                <th class="px-4 py-3 text-left font-medium">User</th>
-                <th class="px-4 py-3 text-left font-medium">Type</th>
-                <th class="px-4 py-3 text-left font-medium">Message</th>
+                <th class="px-4 py-3 text-left font-medium">{{ _('Time') }}</th>
+                <th class="px-4 py-3 text-left font-medium">{{ _('User') }}</th>
+                <th class="px-4 py-3 text-left font-medium">{{ _('Type') }}</th>
+                <th class="px-4 py-3 text-left font-medium">{{ _('Message') }}</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -61,7 +61,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="4" class="px-4 py-8 text-center text-gray-400">No log entries found.</td>
+                <td colspan="4" class="px-4 py-8 text-center text-gray-400">{{ _('No log entries found.') }}</td>
             </tr>
             {% endfor %}
         </tbody>

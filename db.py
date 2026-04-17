@@ -241,6 +241,7 @@ def get_vacation_summary(user_id, period_start, period_end, earning_start=None, 
         JOIN team_members tm ON vd.member_id = tm.id
         JOIN users u ON u.username = tm.name
         WHERE u.id = %s AND vd.status = 'approved'
+          AND vd.self_paid = FALSE
           AND vd.vacation_date BETWEEN %s AND %s
     """, (user_id, period_start, period_end))
     used = cursor.fetchone()[0]
@@ -283,6 +284,7 @@ def get_period_vacation_summary(user_id, period_start, period_end, earning_start
         JOIN team_members tm ON vd.member_id = tm.id
         JOIN users u ON u.username = tm.name
         WHERE u.id = %s AND vd.status = 'approved'
+          AND vd.self_paid = FALSE
           AND vd.vacation_date BETWEEN %s AND %s
     """, (user_id, period_start, period_end))
     used = cursor.fetchone()[0]
@@ -306,7 +308,7 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
         cursor.execute("""
             SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
                    u.days_off_per_year, u.start_date,
-                   COALESCE(SUM(CASE WHEN vd.status = 'approved' THEN 1 ELSE 0 END), 0) AS used,
+                   COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE THEN 1 ELSE 0 END), 0) AS used,
                    u.last_login
             FROM users u
             LEFT JOIN team_members tm ON tm.name = u.username
@@ -320,7 +322,7 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
         cursor.execute("""
             SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
                    u.days_off_per_year, u.start_date,
-                   COALESCE(SUM(CASE WHEN vd.status = 'approved' THEN 1 ELSE 0 END), 0) AS used,
+                   COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE THEN 1 ELSE 0 END), 0) AS used,
                    u.last_login
             FROM users u
             LEFT JOIN team_members tm ON tm.name = u.username
@@ -510,7 +512,7 @@ def delete_team_member(member_id):
 # Vacations
 # ---------------------------------------------------------------------------
 
-def add_vacation_for_user(user_id, start_date, end_date, requested_by=None):
+def add_vacation_for_user(user_id, start_date, end_date, requested_by=None, self_paid=False):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
@@ -544,10 +546,10 @@ def add_vacation_for_user(user_id, start_date, end_date, requested_by=None):
         try:
             cursor.execute(
                 """INSERT INTO vacation_days
-                   (member_id, vacation_date, status, requested_by, approved_by, approved_at)
-                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                   (member_id, vacation_date, status, requested_by, approved_by, approved_at, self_paid)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
                 (member_id, current, status, requested_by,
-                 requested_by, _now())
+                 requested_by, _now(), self_paid)
             )
             added += 1
         except mysql.connector.IntegrityError:
@@ -923,7 +925,8 @@ def get_vacations_for_date_range(start_date, end_date):
         SELECT u.id, COALESCE(u.display_name, u.username) as display,
                vd.vacation_date, vd.status,
                vd.created_at,
-               COALESCE(creator.display_name, vd.requested_by) AS created_by_name
+               COALESCE(creator.display_name, vd.requested_by) AS created_by_name,
+               vd.self_paid
         FROM users u
         LEFT JOIN team_members tm ON tm.name = u.username
         LEFT JOIN vacation_days vd ON tm.id = vd.member_id
@@ -1201,9 +1204,12 @@ def get_all_review_requests_for_grid():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, title, start_date, end_date, department_id, color, active
-        FROM review_requests
-        ORDER BY created_at DESC
+        SELECT rr.id, rr.title, rr.start_date, rr.end_date, rr.department_id,
+               rr.color, rr.active, rr.review_activated,
+               COALESCE(u.display_name, u.username) AS creator_name
+        FROM review_requests rr
+        LEFT JOIN users u ON u.id = rr.created_by
+        ORDER BY rr.created_at DESC
     """)
     rows = cursor.fetchall()
     cursor.close()
@@ -1488,6 +1494,28 @@ def delete_user(user_id):
     conn.close()
 
 
+def reset_user_holidays(user_id):
+    """Delete all vacation days for the user, withdraw all review sign-offs,
+    and reset accrued_days_initial + start_date so they re-do the initial-setup flow on next login."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET accrued_days_initial = FALSE, start_date = NULL WHERE id = %s",
+        (user_id,))
+    cursor.execute("""
+        DELETE vd FROM vacation_days vd
+        JOIN team_members tm ON vd.member_id = tm.id
+        JOIN users u ON u.username = tm.name
+        WHERE u.id = %s
+    """, (user_id,))
+    cursor.execute(
+        "UPDATE review_responses SET decided_at = NULL WHERE user_id = %s",
+        (user_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
 def get_vacation_days_per_month(user_id, period_start, period_end):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1497,6 +1525,7 @@ def get_vacation_days_per_month(user_id, period_start, period_end):
         JOIN team_members tm ON vd.member_id = tm.id
         JOIN users u ON u.username = tm.name
         WHERE u.id = %s AND vd.status = 'approved'
+          AND vd.self_paid = FALSE
           AND vd.vacation_date BETWEEN %s AND %s
         GROUP BY y, m
         ORDER BY y, m
@@ -1516,6 +1545,7 @@ def get_all_vacation_days_per_month(period_start, period_end):
         JOIN team_members tm ON vd.member_id = tm.id
         JOIN users u ON u.username = tm.name
         WHERE vd.status = 'approved'
+          AND vd.self_paid = FALSE
           AND vd.vacation_date BETWEEN %s AND %s
         GROUP BY u.id, y, m
         ORDER BY u.id, y, m

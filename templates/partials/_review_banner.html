@@ -9,7 +9,7 @@
                 {{ rr_title }}
             </div>
             <div class="text-sm text-gray-600 dark:text-gray-300">
-                Please verify your holidays are correct for
+                {{ _('Please verify your holidays are correct for') }}
                 {{ rr_start|fmtdate }} &ndash; {{ rr_end|fmtdate }}
             </div>
         </div>
@@ -17,8 +17,8 @@
             <button type="submit"
                     class="px-4 py-2 text-white rounded-lg whitespace-nowrap ml-4 text-left hover:brightness-110"
                     style="background:{{ rr_color }}">
-                <span class="text-sm font-medium">Sign Off</span><br>
-                <span class="block text-[10px] opacity-80 font-normal leading-none">I solemnly swear that I have marked<br>all holiday plans in this given period</span>
+                <span class="text-sm font-medium">{{ _('Sign Off') }}</span><br>
+                <span class="block text-[10px] opacity-80 font-normal leading-none">{{ _('I solemnly swear that I have marked all holiday plans in this given period') }}</span>
             </button>
         </form>
     </div>
@@ -29,13 +29,13 @@
     <table class="text-xs w-auto">
         <thead>
             <tr style="color:{{ rr_color }}80">
-                <th class="px-1.5 py-0.5 font-medium">Mon</th>
-                <th class="px-1.5 py-0.5 font-medium">Tue</th>
-                <th class="px-1.5 py-0.5 font-medium">Wed</th>
-                <th class="px-1.5 py-0.5 font-medium">Thu</th>
-                <th class="px-1.5 py-0.5 font-medium">Fri</th>
-                <th class="px-1.5 py-0.5 font-medium" style="color:{{ rr_color }}40">Sat</th>
-                <th class="px-1.5 py-0.5 font-medium" style="color:{{ rr_color }}40">Sun</th>
+                <th class="px-1.5 py-0.5 font-medium">{{ _('Mon') }}</th>
+                <th class="px-1.5 py-0.5 font-medium">{{ _('Tue') }}</th>
+                <th class="px-1.5 py-0.5 font-medium">{{ _('Wed') }}</th>
+                <th class="px-1.5 py-0.5 font-medium">{{ _('Thu') }}</th>
+                <th class="px-1.5 py-0.5 font-medium">{{ _('Fri') }}</th>
+                <th class="px-1.5 py-0.5 font-medium" style="color:{{ rr_color }}40">{{ _('Sat') }}</th>
+                <th class="px-1.5 py-0.5 font-medium" style="color:{{ rr_color }}40">{{ _('Sun') }}</th>
             </tr>
         </thead>
         <tbody>
