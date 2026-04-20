@@ -215,10 +215,22 @@ def register():
         if len(password) < 4:
             flash(_('Password must be at least 4 characters.'), 'error')
             return redirect(url_for('register'))
-        success, msg = db.register_user(shortname, password, display_name=display_name, email=email, font=font, department_id=department_id)
+        success, msg, new_id, role = db.register_user(shortname, password, display_name=display_name, email=email, font=font, department_id=department_id)
         if success:
-            flash(_(msg), 'success')
-            return redirect(url_for('login'))
+            session['user_id'] = new_id
+            session['username'] = shortname
+            session['must_change_password'] = False
+            session['theme'] = 'light'
+            session['role'] = role or 'user'
+            session['initials'] = shortname
+            session['font'] = font or ''
+            session['email'] = email or ''
+            session['needs_initial_accrued'] = True
+            session['department_id'] = department_id
+            token = db.create_session_token(new_id)
+            resp = redirect(url_for('calendar_redirect'))
+            resp.set_cookie('session_token', token, max_age=2592000, httponly=True, samesite='Lax')
+            return resp
         flash(_(msg), 'error')
         return redirect(url_for('register'))
     departments = db.get_all_departments()

@@ -10,14 +10,14 @@ def test_hash_password_differs_for_different_input():
 
 
 def test_register_user():
-    success, msg = register_user("testuser", "testpass")
+    success, msg, _id, _role = register_user("testuser", "testpass")
     assert success is True
     assert "created" in msg.lower()
 
 
 def test_register_duplicate_user():
     register_user("dupuser", "pass1")
-    success, msg = register_user("dupuser", "pass2")
+    success, msg, _id, _role = register_user("dupuser", "pass2")
     assert success is False
     assert "already exists" in msg.lower()
 
