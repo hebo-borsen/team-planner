@@ -61,7 +61,7 @@ tr.cal-hover td:hover::after {
             {% set display = udisplay_name or uname %}
             {% set selectable = is_admin or uid == user_id %}
             <tr class="{{ 'cal-row cal-hover' if selectable else '' }}" data-uid="{{ uid }}">
-                <td class="sticky-name px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 bg-white dark:bg-gray-900 z-10 whitespace-nowrap {{ 'text-gray-400 dark:text-gray-500 italic' if is_secondary else '' }}"
+                <td class="sticky-name px-3 py-1.5 font-medium border border-gray-200 dark:border-gray-700 sticky left-0 {{ 'bg-borsen-red-light dark:bg-red-900/30' if uid == user_id and not is_secondary else 'bg-white dark:bg-gray-900' }} z-10 whitespace-nowrap {{ 'text-gray-400 dark:text-gray-500 italic' if is_secondary else '' }}"
                     {% if ufont %}style="font-family: '{{ ufont }}', cursive;"{% endif %}>
                     {{ display }}
                     {% if is_secondary %}
@@ -81,6 +81,7 @@ tr.cal-hover td:hover::after {
                     {{ 'bg-gray-200 dark:bg-gray-700' if day in weekend_days else '' }}
                     {{ 'bg-green-100 dark:bg-green-900/30' if day in holiday_dict and day not in weekend_days and day not in user_vacs else '' }}
                     {{ 'bg-amber-500 text-white font-bold' if show_self_paid else ('bg-borsen-pink text-white font-bold' if day in user_vacs else '') }}
+                    {{ 'bg-borsen-red-light dark:bg-red-900/30' if uid == user_id and not is_secondary and cell_type == 'empty' else '' }}
                     {{ 'relative' if rc and day not in weekend_days and day not in holiday_dict else '' }}"
                     data-date="{{ day.isoformat() }}" data-type="{{ cell_type }}"
                     {% if vac_meta %}data-created-at="{{ vac_meta.created_at|fmtdatetime }}" data-created-by="{{ vac_meta.created_by or _('Unknown') }}"{% if show_self_paid %} data-self-paid="1"{% endif %}{% endif %}

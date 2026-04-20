@@ -314,7 +314,7 @@ function toggleFullWidth() {
             <tbody>
                 {% for uid, display_name, entitlement, used, user_chart, user_suggested, last_login, available in admin_summaries %}
                 {% set remaining = entitlement - (used|float) %}
-                <tr class="border-b border-gray-100 dark:border-gray-800">
+                <tr class="border-b border-gray-100 dark:border-gray-800 {{ 'bg-borsen-red-light/60 dark:bg-red-900/20' if uid == user_id else '' }}">
                     <td class="py-2.5">{{ display_name }}</td>
                     <td class="py-2.5 text-right">{{ entitlement }}</td>
                     <td class="py-2.5 text-right">{{ used }}</td>
