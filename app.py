@@ -327,10 +327,14 @@ def initial_accrued():
 
         # Recompute accrued using the chosen start date so days_used is correct.
         today = date.today()
-        if earning_start:
+        if earning_start and earning_end:
             accrual_start = effective_start if effective_start and effective_start > earning_start else earning_start
-            months_elapsed = max(0, (today.year - accrual_start.year) * 12 + today.month - accrual_start.month)
-            accrued = round(base_days / 12 * months_elapsed, 1)
+            days_in_period = (earning_end - earning_start).days + 1
+            if today < accrual_start:
+                days_elapsed = 0
+            else:
+                days_elapsed = (min(today, earning_end) - accrual_start).days + 1
+            accrued = round(base_days * days_elapsed / days_in_period, 1)
         else:
             accrued = 0
 
@@ -1418,6 +1422,7 @@ def chart_demo():
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     entitlement = period_summary.get('days_off_per_year', 0)
+    days_in_earning = (earning_end - earning_start).days + 1
     monthly_chart = []
     cumulative_used = 0
     d = date(period_start.year, period_start.month, 1)
@@ -1427,9 +1432,11 @@ def chart_demo():
         is_past = (d.year < today.year) or (d.year == today.year and d.month < today.month)
         is_current = (d.year == today.year and d.month == today.month)
         cumulative_used += used_m
-        # How many full earning months have elapsed by end of this month
-        earning_months_elapsed = (d.year - earning_start.year) * 12 + d.month - earning_start.month + 1
-        accrued = min(entitlement, round(entitlement / 12 * max(0, earning_months_elapsed), 1))
+        # Last day of month d, clamped to the earning period.
+        next_month = date(d.year + 1, 1, 1) if d.month == 12 else date(d.year, d.month + 1, 1)
+        month_end = min(next_month - timedelta(days=1), earning_end)
+        days_elapsed = max(0, (month_end - earning_start).days + 1)
+        accrued = min(entitlement, round(entitlement * days_elapsed / days_in_earning, 1))
         monthly_chart.append({
             'label': month_names[d.month - 1],
             'year': d.year,

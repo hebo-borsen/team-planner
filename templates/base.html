@@ -28,7 +28,7 @@
             }
         }
         // Apply dark mode immediately from localStorage to avoid flash
-        if (localStorage.getItem('dvdDark') === '1') {
+        if (localStorage.getItem('dvdDark') === '1' || localStorage.getItem('plainDark') === '1') {
             document.documentElement.classList.add('dark');
         }
     </script>
@@ -321,6 +321,11 @@
                         EN
                     </button>
                 </form>
+                <button id="theme-toggle-plain" title="{{ _('Toggle dark mode') }}"
+                        class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 select-none cursor-pointer text-xs">
+                    <span class="theme-sun px-1 rounded">☀</span>
+                    <span class="theme-moon px-1 rounded">☾</span>
+                </button>
             </div>
             {% if is_superuser %}
             <div class="flex items-center gap-3 text-xs">
@@ -785,6 +790,39 @@
         if (localStorage.getItem('dvdDark') === '1') {
             startDvd();
         }
+    })();
+    </script>
+
+    <!-- Plain dark mode toggle (footer) — no DVD animation -->
+    <script>
+    (function() {
+        var btn = document.getElementById('theme-toggle-plain');
+        if (!btn) return;
+
+        function setVisual(dark) {
+            document.querySelectorAll('.theme-sun').forEach(function(el) {
+                el.className = 'theme-sun px-1 rounded ' + (dark ? 'bg-transparent opacity-50' : 'bg-amber-200');
+            });
+            document.querySelectorAll('.theme-moon').forEach(function(el) {
+                el.className = 'theme-moon px-1 rounded ' + (dark ? 'bg-indigo-500 text-white' : 'bg-transparent opacity-50');
+            });
+        }
+
+        setVisual(document.documentElement.classList.contains('dark'));
+
+        btn.addEventListener('click', function() {
+            if (localStorage.getItem('dvdDark') === '1') return;
+            var isDark = document.documentElement.classList.contains('dark');
+            if (isDark) {
+                localStorage.removeItem('plainDark');
+                document.documentElement.classList.remove('dark');
+                setVisual(false);
+            } else {
+                localStorage.setItem('plainDark', '1');
+                document.documentElement.classList.add('dark');
+                setVisual(true);
+            }
+        });
     })();
     </script>
 </body>
