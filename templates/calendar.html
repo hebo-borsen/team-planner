@@ -134,7 +134,7 @@ function toggleFullWidth() {
                 </div>
                 <div class="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
                     <span>{{ _('Earned calculation:') }}</span>
-                    <span>{{ vacation_summary.base_days }} / 12 &times; {{ vacation_summary.months_elapsed }} = {{ vacation_summary.accrued }}</span>
+                    <span>{{ vacation_summary.base_days }} &times; {{ vacation_summary.days_elapsed }} / {{ vacation_summary.days_in_period }} = {{ vacation_summary.accrued }}</span>
                 </div>
                 <div class="flex justify-between"><span>{{ _('Accrual start:') }}</span> <span>{{ vacation_summary.accrual_start|fmtdate }}</span></div>
                 {% if vacation_summary.base_days != vacation_summary.days_off_per_year %}
@@ -148,7 +148,8 @@ function toggleFullWidth() {
             <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400">{{ _('Holiday balance') }}</h3>
             <div id="balance-chart-tip" class="hidden absolute z-20 px-2 py-1 text-[10px] leading-tight rounded bg-gray-900 text-white shadow pointer-events-none whitespace-pre"></div>
             {% set n = monthly_chart|length %}
-            {% set y_max = (user_entitlement + 2) if user_entitlement > 0 else 1 %}
+            {% set y_max = (5 * (((user_entitlement + 2) / 5)|round(0, 'ceil')|int)) if user_entitlement > 0 else 5 %}
+            {% set y_ticks = (y_max / 5)|int %}
             {% set svg_w = 280 %}
             {% set svg_h = 110 %}
             {% set pad_l = 22 %}
@@ -193,11 +194,11 @@ function toggleFullWidth() {
             {% for m in monthly_chart %}{% if m.is_current %}{% set _d = now_idx.append(loop.index0) %}{% endif %}{% endfor %}
 
             <svg viewBox="0 0 {{ svg_w }} {{ svg_h }}" class="w-full" style="max-height: 130px;">
-                {# Grid lines #}
-                {% for i in range(4) %}
-                {% set gy = pad_t + plot_h * i / 3 %}
+                {# Grid lines at multiples of 5 (one week = 5 days) #}
+                {% for i in range(y_ticks + 1) %}
+                {% set gy = pad_t + plot_h * i / y_ticks %}
                 <line x1="{{ pad_l }}" y1="{{ gy|round(1) }}" x2="{{ svg_w - pad_r }}" y2="{{ gy|round(1) }}" stroke="currentColor" stroke-opacity="0.07" stroke-width="0.5"/>
-                {% set lv = (y_max * (3 - i) / 3)|round|int %}
+                {% set lv = y_max - i * 5 %}
                 <text x="{{ pad_l - 3 }}" y="{{ gy|round(1) + 3 }}" text-anchor="end" class="fill-gray-400 dark:fill-gray-500" style="font-size:7px;">{{ lv }}</text>
                 {% endfor %}
 
@@ -314,7 +315,7 @@ function toggleFullWidth() {
             <tbody>
                 {% for uid, display_name, entitlement, used, user_chart, user_suggested, last_login, available in admin_summaries %}
                 {% set remaining = entitlement - (used|float) %}
-                <tr class="border-b border-gray-100 dark:border-gray-800">
+                <tr class="border-b border-gray-100 dark:border-gray-800 {{ 'bg-borsen-red-light/60 dark:bg-red-900/20' if uid == user_id else '' }}">
                     <td class="py-2.5">{{ display_name }}</td>
                     <td class="py-2.5 text-right">{{ entitlement }}</td>
                     <td class="py-2.5 text-right">{{ used }}</td>

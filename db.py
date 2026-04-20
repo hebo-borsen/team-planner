@@ -140,6 +140,9 @@ def get_user_by_session_token(token):
         (token,)
     )
     user = cursor.fetchone()
+    if user:
+        cursor.execute("UPDATE users SET last_login = %s WHERE id = %s", (_now(), user[0]))
+        conn.commit()
     cursor.close()
     conn.close()
     return user
@@ -215,14 +218,25 @@ def update_days_off(user_id, days_off):
 
 
 def _prorate_entitlement(days_off_per_year, start_date, earning_start, earning_end):
-    """If start_date is within the earning period, prorate. Otherwise full entitlement."""
+    """If start_date is within the earning period, prorate by day. Otherwise full entitlement."""
     base = float(days_off_per_year)
     if start_date and earning_start <= start_date <= earning_end:
-        months_in_period = (earning_end.year - start_date.year) * 12 + earning_end.month - start_date.month + 1
-        if months_in_period < 1:
-            months_in_period = 1
-        return round(base / 12 * months_in_period, 1)
+        total_days = (earning_end - earning_start).days + 1
+        days_employed = (earning_end - start_date).days + 1
+        return round(base * days_employed / total_days, 1)
     return base
+
+
+def _accrual_details(base_days, user_start, earn_start, earn_end, today):
+    """Return (accrual_start, days_elapsed, days_in_period, accrued)."""
+    accrual_start = max(earn_start, user_start) if user_start and user_start > earn_start else earn_start
+    days_in_period = (earn_end - earn_start).days + 1
+    if today < accrual_start:
+        days_elapsed = 0
+    else:
+        days_elapsed = (min(today, earn_end) - accrual_start).days + 1
+    accrued = round(float(base_days) * days_elapsed / days_in_period, 1)
+    return accrual_start, days_elapsed, days_in_period, accrued
 
 
 def get_vacation_summary(user_id, period_start, period_end, earning_start=None, earning_end=None):
@@ -252,11 +266,8 @@ def get_vacation_summary(user_id, period_start, period_end, earning_start=None, 
 
     # Calculate accrued dynamically based on earning period
     today = _date.today()
-    accrual_start = max(earn_start, user_start) if user_start and user_start > earn_start else earn_start
-    months_elapsed = (today.year - accrual_start.year) * 12 + today.month - accrual_start.month
-    if months_elapsed < 0:
-        months_elapsed = 0
-    accrued = round(float(base_days) / 12 * months_elapsed, 1)
+    accrual_start, days_elapsed, days_in_period, accrued = _accrual_details(
+        base_days, user_start, earn_start, earn_end, today)
 
     return {
         'days_off_per_year': entitlement,
@@ -264,7 +275,8 @@ def get_vacation_summary(user_id, period_start, period_end, earning_start=None, 
         'remaining': entitlement - used,
         'accrued': accrued,
         'accrual_start': accrual_start,
-        'months_elapsed': months_elapsed,
+        'days_elapsed': days_elapsed,
+        'days_in_period': days_in_period,
         'base_days': float(base_days),
     }
 
@@ -342,11 +354,7 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
     for uid, display_name, base_days, user_start, used, last_login in raw:
         base = base_days if base_days is not None else 34
         entitlement = _prorate_entitlement(base, user_start, earn_start, earn_end)
-        accrual_start = max(earn_start, user_start) if user_start and user_start > earn_start else earn_start
-        months_elapsed = (today.year - accrual_start.year) * 12 + today.month - accrual_start.month
-        if months_elapsed < 0:
-            months_elapsed = 0
-        accrued = round(float(base) / 12 * months_elapsed, 1)
+        _, _, _, accrued = _accrual_details(base, user_start, earn_start, earn_end, today)
         available = round(accrued - int(used), 1)
         results.append((uid, display_name, entitlement, int(used), last_login, available))
     return results
