@@ -140,6 +140,9 @@ def get_user_by_session_token(token):
         (token,)
     )
     user = cursor.fetchone()
+    if user:
+        cursor.execute("UPDATE users SET last_login = %s WHERE id = %s", (_now(), user[0]))
+        conn.commit()
     cursor.close()
     conn.close()
     return user
