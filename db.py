@@ -39,8 +39,8 @@ def authenticate_user(username, password):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, username, must_change_password, theme, role, initials, font, email FROM users WHERE username = %s AND password_hash = %s",
-        (username, hash_password(password))
+        "SELECT id, username, must_change_password, theme, role, initials, font, email FROM users WHERE (username = %s OR LOWER(email) = LOWER(%s)) AND password_hash = %s",
+        (username, username, hash_password(password))
     )
     user = cursor.fetchone()
     if user:
@@ -66,10 +66,11 @@ def register_user(username, password, display_name=None, email=None, font=None, 
             "INSERT INTO users (username, password_hash, must_change_password, initials, display_name, email, font, role, department_id) VALUES (%s, %s, FALSE, %s, %s, %s, %s, %s, %s)",
             (username, hash_password(password), username, display_name, email, font, role, department_id)
         )
+        new_id = cursor.lastrowid
         conn.commit()
-        return True, "Account created! You can now log in."
+        return True, "Account created! You can now log in.", new_id, role
     except mysql.connector.IntegrityError:
-        return False, "Shortname already exists."
+        return False, "Shortname already exists.", None, None
     finally:
         cursor.close()
         conn.close()
