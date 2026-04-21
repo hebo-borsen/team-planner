@@ -320,7 +320,7 @@ function toggleFullWidth() {
                     <td class="py-2.5 text-right">{{ entitlement }}</td>
                     <td class="py-2.5 text-right">{{ used }}</td>
                     <td class="py-2.5 text-right font-medium">
-                        {{ remaining }}
+                        {{ remaining|round(2) }}
                     </td>
                     <td class="py-2.5 text-right font-medium {% if available < 0 %}text-red-600 dark:text-red-400{% elif available == 0 %}text-amber-600 dark:text-amber-400{% else %}text-green-600 dark:text-green-400{% endif %}">
                         {{ available }}

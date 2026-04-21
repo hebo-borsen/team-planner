@@ -313,8 +313,10 @@ def get_period_vacation_summary(user_id, period_start, period_end, earning_start
 
 
 def get_all_users_period_summary(period_start, period_end, department_id=None, earning_start=None, earning_end=None):
+    from datetime import date as _date
     earn_start = earning_start or period_start
     earn_end = earning_end or period_end
+    today = _date.today()
     conn = get_db_connection()
     cursor = conn.cursor()
     if department_id is not None:
@@ -322,6 +324,7 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
             SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
                    u.days_off_per_year, u.start_date,
                    COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE THEN 1 ELSE 0 END), 0) AS used,
+                   COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE AND vd.vacation_date <= %s THEN 1 ELSE 0 END), 0) AS used_so_far,
                    u.last_login
             FROM users u
             LEFT JOIN team_members tm ON tm.name = u.username
@@ -330,12 +333,13 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
             WHERE u.active = TRUE AND u.department_id = %s
             GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date, u.last_login
             ORDER BY COALESCE(u.display_name, u.username)
-        """, (period_start, period_end, department_id))
+        """, (today, period_start, period_end, department_id))
     else:
         cursor.execute("""
             SELECT u.id, COALESCE(u.display_name, u.username) AS display_name,
                    u.days_off_per_year, u.start_date,
                    COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE THEN 1 ELSE 0 END), 0) AS used,
+                   COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE AND vd.vacation_date <= %s THEN 1 ELSE 0 END), 0) AS used_so_far,
                    u.last_login
             FROM users u
             LEFT JOIN team_members tm ON tm.name = u.username
@@ -344,18 +348,16 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
             WHERE u.active = TRUE
             GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date, u.last_login
             ORDER BY COALESCE(u.display_name, u.username)
-        """, (period_start, period_end))
+        """, (today, period_start, period_end))
     raw = cursor.fetchall()
     cursor.close()
     conn.close()
-    from datetime import date as _date
-    today = _date.today()
     results = []
-    for uid, display_name, base_days, user_start, used, last_login in raw:
+    for uid, display_name, base_days, user_start, used, used_so_far, last_login in raw:
         base = base_days if base_days is not None else 34
         entitlement = _prorate_entitlement(base, user_start, earn_start, earn_end)
         _, _, _, accrued = _accrual_details(base, user_start, earn_start, earn_end, today)
-        available = round(accrued - int(used), 1)
+        available = round(accrued - int(used_so_far), 1)
         results.append((uid, display_name, entitlement, int(used), last_login, available))
     return results
 
