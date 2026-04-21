@@ -31,6 +31,15 @@ def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 
+def touch_last_seen(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET last_seen = %s WHERE id = %s", (_now(), user_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -325,13 +334,13 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
                    u.days_off_per_year, u.start_date,
                    COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE THEN 1 ELSE 0 END), 0) AS used,
                    COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE AND vd.vacation_date <= %s THEN 1 ELSE 0 END), 0) AS used_so_far,
-                   u.last_login
+                   COALESCE(u.last_seen, u.last_login) AS last_seen
             FROM users u
             LEFT JOIN team_members tm ON tm.name = u.username
             LEFT JOIN vacation_days vd ON tm.id = vd.member_id
                 AND vd.vacation_date BETWEEN %s AND %s
             WHERE u.active = TRUE AND u.department_id = %s
-            GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date, u.last_login
+            GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date, u.last_login, u.last_seen
             ORDER BY COALESCE(u.display_name, u.username)
         """, (today, period_start, period_end, department_id))
     else:
@@ -340,13 +349,13 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
                    u.days_off_per_year, u.start_date,
                    COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE THEN 1 ELSE 0 END), 0) AS used,
                    COALESCE(SUM(CASE WHEN vd.status = 'approved' AND vd.self_paid = FALSE AND vd.vacation_date <= %s THEN 1 ELSE 0 END), 0) AS used_so_far,
-                   u.last_login
+                   COALESCE(u.last_seen, u.last_login) AS last_seen
             FROM users u
             LEFT JOIN team_members tm ON tm.name = u.username
             LEFT JOIN vacation_days vd ON tm.id = vd.member_id
                 AND vd.vacation_date BETWEEN %s AND %s
             WHERE u.active = TRUE
-            GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date, u.last_login
+            GROUP BY u.id, u.display_name, u.username, u.days_off_per_year, u.start_date, u.last_login, u.last_seen
             ORDER BY COALESCE(u.display_name, u.username)
         """, (today, period_start, period_end))
     raw = cursor.fetchall()
