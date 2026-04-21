@@ -34,6 +34,29 @@ app.jinja_env.globals['get_locale'] = get_locale
 # Template filters
 # ---------------------------------------------------------------------------
 
+LAST_SEEN_THROTTLE = timedelta(minutes=10)
+
+
+@app.before_request
+def _track_last_seen():
+    user_id = session.get('user_id')
+    if not user_id:
+        return
+    if request.endpoint == 'static':
+        return
+    now = datetime.now()
+    written = session.get('last_seen_written')
+    if written:
+        try:
+            written_dt = datetime.fromisoformat(written)
+            if now - written_dt < LAST_SEEN_THROTTLE:
+                return
+        except (TypeError, ValueError):
+            pass
+    db.touch_last_seen(user_id)
+    session['last_seen_written'] = now.isoformat()
+
+
 @app.template_filter('fmtdate')
 def format_date(value):
     """Format a date as '1. feb - 2026'."""
