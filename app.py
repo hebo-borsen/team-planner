@@ -498,21 +498,27 @@ def calendar_view(dept_id):
                     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
                     enriched = []
-                    for uid, display_name, entitlement, used, last_login, available in admin_summaries:
+                    for uid, display_name, entitlement, used, last_login, available, user_start in admin_summaries:
                         remaining = entitlement - used
                         user_suggested = round(remaining / months_left, 1)
                         user_usage = all_usage.get(uid, {})
                         chart = []
                         cum_used = 0
+                        accrual_start = date(earning_start.year, earning_start.month, 1)
+                        if user_start and user_start > earning_start:
+                            accrual_start = date(user_start.year, user_start.month, 1)
                         d_m = date(earning_start.year, earning_start.month, 1)
                         end_m = date(pend.year, pend.month, 1)
+                        accrual_months = (earning_end.year - accrual_start.year) * 12 + earning_end.month - accrual_start.month + 1
+                        if accrual_months < 1:
+                            accrual_months = 1
                         while d_m <= end_m:
                             used_m = user_usage.get((d_m.year, d_m.month), 0)
                             is_past = (d_m.year < today.year) or (d_m.year == today.year and d_m.month < today.month)
                             is_current = (d_m.year == today.year and d_m.month == today.month)
                             cum_used += used_m
-                            e_months = (d_m.year - earning_start.year) * 12 + d_m.month - earning_start.month
-                            accrued = min(entitlement, round(entitlement / 12 * max(0, e_months), 1))
+                            e_months = (d_m.year - accrual_start.year) * 12 + d_m.month - accrual_start.month
+                            accrued = min(entitlement, round(entitlement / accrual_months * max(0, e_months), 1))
                             chart.append({
                                 'label': month_names[d_m.month - 1],
                                 'year': d_m.year,

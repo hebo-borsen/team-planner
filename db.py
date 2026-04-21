@@ -367,7 +367,7 @@ def get_all_users_period_summary(period_start, period_end, department_id=None, e
         entitlement = _prorate_entitlement(base, user_start, earn_start, earn_end)
         _, _, _, accrued = _accrual_details(base, user_start, earn_start, earn_end, today)
         available = round(accrued - int(used_so_far), 1)
-        results.append((uid, display_name, entitlement, int(used), last_login, available))
+        results.append((uid, display_name, entitlement, int(used), last_login, available, user_start))
     return results
 
 
